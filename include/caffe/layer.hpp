@@ -3,13 +3,15 @@
 
 #include <algorithm>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "caffe/blob.hpp"
 #include "caffe/common.hpp"
 #include "caffe/layer_factory.hpp"
 #include "caffe/proto/caffe.pb.h"
-#include "caffe/util/math_functions.hpp"
+#include "caffe/util/coords.hpp"
+#include "caffe/util/device_alternate.hpp"
 
 /**
  Forward declare boost::thread instead of including boost/thread.hpp
@@ -18,6 +20,8 @@
 namespace boost { class mutex; }
 
 namespace caffe {
+
+template <typename Dtype> class Net;
 
 /**
  * @brief An interface for the units of computation which can be composed into a
@@ -38,7 +42,7 @@ class Layer {
    * layer.
    */
   explicit Layer(const LayerParameter& param)
-    : layer_param_(param) {
+    : layer_param_(param), is_shared_(false) {
       // Set phase and copy blobs (if there are any).
       phase_ = param.phase();
       if (layer_param_.blobs_size() > 0) {
@@ -66,6 +70,8 @@ class Layer {
    */
   void SetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
+          //LOG(INFO)<<"Calling SetUp()..";
+    InitMutex();
     CheckBlobCounts(bottom, top);
     LayerSetUp(bottom, top);
     Reshape(bottom, top);
@@ -90,6 +96,30 @@ class Layer {
    */
   virtual void LayerSetUp(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {}
+
+  /**
+   * @brief Whether a layer should be shared by multiple nets during data
+   *        parallelism. By default, all layers except for data layers should
+   *        not be shared. data layers should be shared to ensure each worker
+   *        solver access data sequentially during data parallelism.
+   */
+  virtual inline bool ShareInParallel() const { return false; }
+
+  /** @brief Return whether this layer is actually shared by other nets.
+   *         If ShareInParallel() is true and using more than one GPU and the
+   *         net has TRAIN phase, then this function is expected return true.
+   */
+  inline bool IsShared() const { return is_shared_; }
+
+  /** @brief Set whether this layer is actually shared by other nets
+   *         If ShareInParallel() is true and using more than one GPU and the
+   *         net has TRAIN phase, then is_shared should be set true.
+   */
+  inline void SetShared(bool is_shared) {
+    CHECK(ShareInParallel() || !is_shared)
+        << type() << "Layer does not support sharing.";
+    is_shared_ = is_shared;
+  }
 
   /**
    * @brief Adjust the shapes of top blobs and internal buffers to accommodate
@@ -185,6 +215,20 @@ class Layer {
     loss_[top_index] = value;
   }
 
+ /**
+   * @brief Returns the layer type as an enum value.
+   */
+ /* virtual inline LayerParameter_LayerType type() const {
+    return LayerParameter_LayerType_NONE;
+  }*/
+
+  /**
+   * @brief Returns the layer type name.
+   */
+  /*virtual inline const string& type_name() const {
+    return LayerParameter_LayerType_Name(type());
+  } */
+  
   /**
    * @brief Returns the layer type.
    */
@@ -290,7 +334,17 @@ class Layer {
     }
     param_propagate_down_[param_id] = value;
   }
-
+  
+  virtual DiagonalAffineMap<Dtype> coord_map() {
+    NOT_IMPLEMENTED;
+    // suppress warnings
+    return DiagonalAffineMap<Dtype>(vector<pair<Dtype, Dtype> >());
+  }
+  
+  /**
+   * @brief Used by Net to give layers a pointer to their owning net.
+   */
+  void set_net(Net<Dtype>* net) { net_ = net; }
 
  protected:
   /** The protobuf that stores the layer parameters */
@@ -306,6 +360,9 @@ class Layer {
    *  the objective function. */
   vector<Dtype> loss_;
 
+  /** The net to which this layer belongs. */
+  Net<Dtype>* net_;
+  
   /** @brief Using the CPU device, compute the layer output. */
   virtual void Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) = 0;
@@ -403,6 +460,19 @@ class Layer {
   }
 
  private:
+  /** Whether this layer is actually shared by other nets*/
+  bool is_shared_;
+
+  /** The mutex for sequential forward if this layer is shared */
+  shared_ptr<boost::mutex> forward_mutex_;
+
+  /** Initialize forward_mutex_ */
+  void InitMutex();
+  /** Lock forward_mutex_ if this layer is shared */
+  void Lock();
+  /** Unlock forward_mutex_ if this layer is shared */
+  void Unlock();
+
   DISABLE_COPY_AND_ASSIGN(Layer);
 };  // class Layer
 
@@ -412,7 +482,10 @@ class Layer {
 template <typename Dtype>
 inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
+  // Lock during forward to ensure sequential forward
+  Lock();
   Dtype loss = 0;
+  //LOG(INFO) << "here...";
   Reshape(bottom, top);
   switch (Caffe::mode()) {
   case Caffe::CPU:
@@ -442,6 +515,7 @@ inline Dtype Layer<Dtype>::Forward(const vector<Blob<Dtype>*>& bottom,
   default:
     LOG(FATAL) << "Unknown caffe mode.";
   }
+  Unlock();
   return loss;
 }
 

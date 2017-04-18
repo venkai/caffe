@@ -30,9 +30,7 @@ void Blob<Dtype>::Reshape(const vector<int>& shape) {
   int* shape_data = static_cast<int*>(shape_data_->mutable_cpu_data());
   for (int i = 0; i < shape.size(); ++i) {
     CHECK_GE(shape[i], 0);
-    if (count_ != 0) {
-      CHECK_LE(shape[i], INT_MAX / count_) << "blob size exceeds INT_MAX";
-    }
+    CHECK_LE(shape[i], INT_MAX / count_) << "blob size exceeds INT_MAX";
     count_ *= shape[i];
     shape_[i] = shape[i];
     shape_data[i] = shape[i];
@@ -89,12 +87,6 @@ const Dtype* Blob<Dtype>::cpu_data() const {
 template <typename Dtype>
 void Blob<Dtype>::set_cpu_data(Dtype* data) {
   CHECK(data);
-  // Make sure CPU and GPU sizes remain equal
-  size_t size = count_ * sizeof(Dtype);
-  if (data_->size() != size) {
-    data_.reset(new SyncedMemory(size));
-    diff_.reset(new SyncedMemory(size));
-  }
   data_->set_cpu_data(data);
 }
 
@@ -102,18 +94,6 @@ template <typename Dtype>
 const Dtype* Blob<Dtype>::gpu_data() const {
   CHECK(data_);
   return (const Dtype*)data_->gpu_data();
-}
-
-template <typename Dtype>
-void Blob<Dtype>::set_gpu_data(Dtype* data) {
-  CHECK(data);
-  // Make sure CPU and GPU sizes remain equal
-  size_t size = count_ * sizeof(Dtype);
-  if (data_->size() != size) {
-    data_.reset(new SyncedMemory(size));
-    diff_.reset(new SyncedMemory(size));
-  }
-  data_->set_gpu_data(data);
 }
 
 template <typename Dtype>

@@ -16,10 +16,13 @@ from collections import OrderedDict
 
 def parse_log(path_to_log):
     """Parse log file
-    Returns (train_dict_list, test_dict_list)
+    Returns (train_dict_list, train_dict_names, test_dict_list, test_dict_names)
 
     train_dict_list and test_dict_list are lists of dicts that define the table
     rows
+
+    train_dict_names and test_dict_names are ordered tuples of the column names
+    for the two dict_lists
     """
 
     regex_iteration = re.compile('Iteration (\d+)')
@@ -38,7 +41,6 @@ def parse_log(path_to_log):
     logfile_year = extract_seconds.get_log_created_year(path_to_log)
     with open(path_to_log) as f:
         start_time = extract_seconds.get_start_time(f, logfile_year)
-        last_time = start_time
 
         for line in f:
             iteration_match = regex_iteration.search(line)
@@ -49,19 +51,8 @@ def parse_log(path_to_log):
                 # iteration
                 continue
 
-            try:
-                time = extract_seconds.extract_datetime_from_line(line,
-                                                                  logfile_year)
-            except ValueError:
-                # Skip lines with bad formatting, for example when resuming solver
-                continue
-
-            # if it's another year
-            if time.month < last_time.month:
-                logfile_year += 1
-                time = extract_seconds.extract_datetime_from_line(line, logfile_year)
-            last_time = time
-
+            time = extract_seconds.extract_datetime_from_line(line,
+                                                              logfile_year)
             seconds = (time - start_time).total_seconds()
 
             learning_rate_match = regex_learning_rate.search(line)
@@ -158,11 +149,6 @@ def write_csv(output_filename, dict_list, delimiter, verbose=False):
     """Write a CSV file
     """
 
-    if not dict_list:
-        if verbose:
-            print('Not writing %s; no lines to write' % output_filename)
-        return
-
     dialect = csv.excel
     dialect.delimiter = delimiter
 
@@ -203,7 +189,7 @@ def main():
     args = parse_args()
     train_dict_list, test_dict_list = parse_log(args.logfile_path)
     save_csv_files(args.logfile_path, args.output_dir, train_dict_list,
-                   test_dict_list, delimiter=args.delimiter, verbose=args.verbose)
+                   test_dict_list, delimiter=args.delimiter)
 
 
 if __name__ == '__main__':

@@ -8,6 +8,7 @@
 #include "caffe/common.hpp"
 #include "caffe/proto/caffe.pb.h"
 #include "caffe/syncedmem.hpp"
+#include "caffe/util/math_functions.hpp"
 
 const int kMaxBlobAxes = 32;
 
@@ -220,7 +221,6 @@ class Blob {
   void set_cpu_data(Dtype* data);
   const int* gpu_shape() const;
   const Dtype* gpu_data() const;
-  void set_gpu_data(Dtype* data);
   const Dtype* cpu_diff() const;
   const Dtype* gpu_diff() const;
   Dtype* mutable_cpu_data();

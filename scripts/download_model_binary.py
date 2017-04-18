@@ -3,10 +3,9 @@ import os
 import sys
 import time
 import yaml
+import urllib
 import hashlib
 import argparse
-
-from six.moves import urllib
 
 required_keys = ['caffemodel', 'caffemodel_url', 'sha1']
 
@@ -19,7 +18,7 @@ def reporthook(count, block_size, total_size):
     if count == 0:
         start_time = time.time()
         return
-    duration = (time.time() - start_time) or 0.01
+    duration = time.time() - start_time
     progress_size = int(count * block_size)
     speed = int(progress_size / (1024 * duration))
     percent = int(count * block_size * 100 / total_size)
@@ -61,7 +60,7 @@ if __name__ == '__main__':
 
     # Closure-d function for checking SHA1.
     def model_checks_out(filename=model_filename, sha1=frontmatter['sha1']):
-        with open(filename, 'rb') as f:
+        with open(filename, 'r') as f:
             return hashlib.sha1(f.read()).hexdigest() == sha1
 
     # Check if model exists.
@@ -70,7 +69,7 @@ if __name__ == '__main__':
         sys.exit(0)
 
     # Download and verify model.
-    urllib.request.urlretrieve(
+    urllib.urlretrieve(
         frontmatter['caffemodel_url'], model_filename, reporthook)
     if not model_checks_out():
         print('ERROR: model did not download correctly! Run this again.')

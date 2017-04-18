@@ -2,8 +2,11 @@
 #include <cfloat>
 #include <vector>
 
-#include "caffe/layers/pooling_layer.hpp"
+#include "caffe/common.hpp"
+#include "caffe/layer.hpp"
+#include "caffe/syncedmem.hpp"
 #include "caffe/util/math_functions.hpp"
+#include "caffe/vision_layers.hpp"
 
 namespace caffe {
 
@@ -68,8 +71,10 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     CHECK(this->layer_param_.pooling_param().pool()
         == PoolingParameter_PoolMethod_AVE
         || this->layer_param_.pooling_param().pool()
-        == PoolingParameter_PoolMethod_MAX)
-        << "Padding implemented only for average and max pooling.";
+        == PoolingParameter_PoolMethod_MAX
+        || this->layer_param_.pooling_param().pool()
+        == PoolingParameter_PoolMethod_CUSTOM)
+        << "Padding implemented only for average, max and custom pooling.";
     CHECK_LT(pad_h_, kernel_h_);
     CHECK_LT(pad_w_, kernel_w_);
   }
@@ -108,6 +113,9 @@ void PoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   if (top.size() > 1) {
     top[1]->ReshapeLike(*top[0]);
   }
+  /*if (bottom.size() > 1) {
+    bottom[1]->ReshapeLike(*top[0]);
+  }*/
   // If max pooling, we will initialize the vector index part.
   if (this->layer_param_.pooling_param().pool() ==
       PoolingParameter_PoolMethod_MAX && top.size() == 1) {
@@ -132,6 +140,8 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
   const int top_count = top[0]->count();
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;
+  // We'll output the mask to top[1] if it's of size >1.
+  const bool use_bottom_mask = bottom.size() > 1;
   int* mask = NULL;  // suppress warnings about uninitalized variables
   Dtype* top_mask = NULL;
   // Different pooling methods. We explicitly do the switch outside the for
@@ -218,6 +228,60 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
     break;
+  case PoolingParameter_PoolMethod_CUSTOM: {
+    // Initialize
+    /*if (use_top_mask) {
+      top_mask = top[1]->mutable_cpu_data();
+      caffe_set(top_count, Dtype(-1), top_mask);
+    } else {
+      mask = max_idx_.mutable_cpu_data();
+      caffe_set(top_count, -1, mask);
+    }*/
+    CHECK(use_bottom_mask)<<"Bottom Mask must be supplied for custom pooling !!";
+    const Dtype* bottom_mask = bottom[1]->cpu_data();
+    caffe_set(top_count, Dtype(-FLT_MAX), top_data);
+    // The main loop
+    for (int n = 0; n < bottom[0]->num(); ++n) {
+      for (int c = 0; c < channels_; ++c) {
+        for (int ph = 0; ph < pooled_height_; ++ph) {
+          for (int pw = 0; pw < pooled_width_; ++pw) {
+            /*int hstart = ph * stride_h_ - pad_h_;
+            int wstart = pw * stride_w_ - pad_w_;
+            int hend = min(hstart + kernel_h_, height_);
+            int wend = min(wstart + kernel_w_, width_);
+            hstart = max(hstart, 0);
+            wstart = max(wstart, 0);*/
+            const int pool_index = ph * pooled_width_ + pw;
+            const int orig_index = bottom_mask[pool_index];
+            top_data[pool_index] = bottom_data[orig_index];
+            /*for (int h = hstart; h < hend; ++h) {
+              for (int w = wstart; w < wend; ++w) {
+                const int index = h * width_ + w;
+                if (bottom_data[index] > top_data[pool_index]) {
+                  top_data[pool_index] = bottom_data[index];
+                  if (use_top_mask) {
+                    top_mask[pool_index] = static_cast<Dtype>(index);
+                  } else {
+                    mask[pool_index] = index;
+                  }
+                }
+              }
+            }*/
+          }
+        }
+        // compute offset
+        bottom_data += bottom[0]->offset(0, 1);
+        top_data += top[0]->offset(0, 1);
+        bottom_mask += top[0]->offset(0, 1);
+        /*if (use_top_mask) {
+          top_mask += top[0]->offset(0, 1);
+        } else {
+          mask += top[0]->offset(0, 1);
+        }*/
+      }
+    }
+    break;
+  }
   case PoolingParameter_PoolMethod_STOCHASTIC:
     NOT_IMPLEMENTED;
     break;
@@ -297,6 +361,9 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
         top_diff += top[0]->offset(0, 1);
       }
     }
+    break;
+  case PoolingParameter_PoolMethod_CUSTOM:
+    NOT_IMPLEMENTED;
     break;
   case PoolingParameter_PoolMethod_STOCHASTIC:
     NOT_IMPLEMENTED;

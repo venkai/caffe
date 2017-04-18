@@ -2,8 +2,8 @@
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream_impl.h>
 #include <google/protobuf/text_format.h>
-#ifdef USE_OPENCV
 #include <opencv2/core/core.hpp>
+#ifdef USE_OPENCV
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/highgui/highgui_c.h>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -70,8 +70,42 @@ void WriteProtoToBinaryFile(const Message& proto, const char* filename) {
 }
 
 #ifdef USE_OPENCV
-cv::Mat ReadImageToCVMat(const string& filename,
-    const int height, const int width, const bool is_color) {
+
+
+cv::Mat ReadImageToCVMatDeconvnet(const string& filename,
+const int height, const int width, const bool is_color,
+int* img_height, int* img_width) {
+
+    int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
+    CV_LOAD_IMAGE_GRAYSCALE);
+    cv::Mat cv_img_origin = cv::imread(filename, cv_read_flag);
+    if (!cv_img_origin.data) {
+        LOG(ERROR) << "Could not open or find file " << filename;
+        return cv_img_origin;
+    }
+    if (height==0 || width==0){
+        if (img_height != NULL) {
+            *img_height = cv_img_origin.rows;
+        }
+        if (img_width != NULL) {
+            *img_width = cv_img_origin.cols;
+        }
+        return cv_img_origin;
+    }
+    cv::Mat cv_img;
+    cv::resize(cv_img_origin, cv_img, cv::Size(width, height));
+    if (img_height != NULL) {
+        *img_height = cv_img.rows;
+    }
+    if (img_width != NULL) {
+        *img_width = cv_img.cols;
+    }
+    return cv_img;
+}
+
+cv::Mat ReadImageToCVMatNearest(const string& filename,
+                         const int height, const int width, const bool is_color,
+                         int* img_height, int* img_width) {
   cv::Mat cv_img;
   int cv_read_flag = (is_color ? CV_LOAD_IMAGE_COLOR :
     CV_LOAD_IMAGE_GRAYSCALE);
@@ -80,26 +114,41 @@ cv::Mat ReadImageToCVMat(const string& filename,
     LOG(ERROR) << "Could not open or find file " << filename;
     return cv_img_origin;
   }
+
   if (height > 0 && width > 0) {
-    cv::resize(cv_img_origin, cv_img, cv::Size(width, height));
+    cv::resize(cv_img_origin, cv_img, cv::Size(width, height), 0, 0, cv::INTER_NEAREST);
   } else {
     cv_img = cv_img_origin;
   }
+
+  if (img_height != NULL) {
+    *img_height = cv_img.rows;
+  }
+  if (img_width != NULL) {
+    *img_width = cv_img.cols;
+  }
+
   return cv_img;
 }
 
-cv::Mat ReadImageToCVMat(const string& filename,
-    const int height, const int width) {
-  return ReadImageToCVMat(filename, height, width, true);
-}
 
 cv::Mat ReadImageToCVMat(const string& filename,
-    const bool is_color) {
-  return ReadImageToCVMat(filename, 0, 0, is_color);
+    const int height, const int width, const bool is_color) {
+  cv::Mat orig_image = ReadImageToCVMat(filename, is_color);
+  if (!orig_image.data || height == 0 || width == 0) { return orig_image; }
+  cv::Mat image;
+  cv::resize(orig_image, image, cv::Size(width, height));
+  return image;
 }
 
-cv::Mat ReadImageToCVMat(const string& filename) {
-  return ReadImageToCVMat(filename, 0, 0, true);
+cv::Mat ReadImageToCVMat(const string& filename, const bool is_color) {
+  const int cv_read_flag =
+      is_color ? CV_LOAD_IMAGE_COLOR : CV_LOAD_IMAGE_GRAYSCALE;
+  cv::Mat image = cv::imread(filename, cv_read_flag);
+  if (!image.data) {
+    LOG(ERROR) << "Could not open or find file " << filename;
+  }
+  return image;
 }
 
 // Do the file extension and encoding match?

@@ -1,0 +1,25 @@
+#!/bin/sh
+
+# Source this file to load caffe dependencies.  
+
+echo "Loading dependencies for running/compiling caffe"
+
+CUDA_LIBDIR=/opt/common/cuda/cuda-7.5.18/lib64:/opt/common/cuda/cuda-7.5.18/lib
+HDF5_LIBDIR=/opt/local/stow/hdf5-1.8.13/lib
+
+LD_LIBRARY_PATH=${HDF5_LIBDIR}:${CUDA_LIBDIR}:/opt/common/cudnn/v3/lib64:/usr/local/lib:/usr/lib:/usr/lib64
+export LD_LIBRARY_PATH
+
+# Specify path to your MATLAB installation that you used in Makefile.config
+# This will be used for running matcaffe inference scripts
+MATLAB_DIR=/opt/common/matlab-r2014b
+export MATLAB_DIR
+
+# Do not modify below
+# ---------------------
+HDF5_DISABLE_VERSION_CHECK=2
+export HDF5_DISABLE_VERSION_CHECK
+
+echo "LD_LIBRARY_PATH = ${LD_LIBRARY_PATH}"
+echo 
+echo done...

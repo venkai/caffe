@@ -1,7 +1,9 @@
 #ifdef USE_CUDNN
+#include <algorithm>
 #include <vector>
 
-#include "caffe/layers/cudnn_tanh_layer.hpp"
+#include "caffe/layer.hpp"
+#include "caffe/vision_layers.hpp"
 
 namespace caffe {
 
@@ -13,7 +15,6 @@ void CuDNNTanHLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
   CUDNN_CHECK(cudnnCreate(&handle_));
   cudnn::createTensor4dDesc<Dtype>(&bottom_desc_);
   cudnn::createTensor4dDesc<Dtype>(&top_desc_);
-  cudnn::createActivationDescriptor<Dtype>(&activ_desc_, CUDNN_ACTIVATION_TANH);
   handles_setup_ = true;
 }
 

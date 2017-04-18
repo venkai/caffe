@@ -3,11 +3,51 @@
 #include "hdf5.h"
 #include "hdf5_hl.h"
 
-#include "caffe/layers/hdf5_output_layer.hpp"
+#include "caffe/blob.hpp"
+#include "caffe/common.hpp"
+#include "caffe/layer.hpp"
+#include "caffe/vision_layers.hpp"
 
 namespace caffe {
 
+
 template <typename Dtype>
+void HDF5OutputLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top) {
+  CHECK_GE(bottom.size(), 1);
+  stringstream file_name_curr_;
+  file_name_curr_<<file_name_<<"_"<<current_batch_<<".h5";
+  //std::string file_name_curr_;
+  //file_name_curr_ = file_name_ + "_" + current_batch_ + ".h5";
+  file_id_ = H5Fcreate(file_name_curr_.str().c_str(), H5F_ACC_TRUNC, H5P_DEFAULT,
+                       H5P_DEFAULT);
+  CHECK_GE(file_id_, 0) << "Failed to open HDF5 file" << file_name_curr_;
+  file_opened_ = true;
+                       
+  for(int i=0; i<bottom.size(); ++i){
+      SaveBlob(i,bottom);
+  }
+  H5Fflush(file_id_,H5F_SCOPE_GLOBAL);
+  if (file_opened_) {
+    herr_t status = H5Fclose(file_id_);
+    CHECK_GE(status, 0) << "Failed to close HDF5 file " << file_name_curr_;
+    file_opened_ = false;
+  }
+  current_batch_++;
+}
+
+/*template <typename Dtype>
+void HDF5OutputLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+      const vector<Blob<Dtype>*>& top) {
+  CHECK_GE(bottom.size(), 1);
+  for(int i=0; i<bottom.size(); ++i){
+      SaveBlob(i,bottom);
+  }
+  H5Fflush(file_id_,H5F_SCOPE_GLOBAL);
+  current_batch_++;
+}*/
+
+/*template <typename Dtype>
 void HDF5OutputLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   CHECK_GE(bottom.size(), 2);
@@ -26,7 +66,7 @@ void HDF5OutputLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
         &label_blob_.mutable_cpu_data()[i * label_datum_dim]);
   }
   SaveBlobs();
-}
+}*/
 
 template <typename Dtype>
 void HDF5OutputLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
