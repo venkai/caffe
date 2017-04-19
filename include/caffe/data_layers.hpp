@@ -253,6 +253,7 @@ namespace caffe {
         virtual inline const char* type() const { return "ImageData"; }
         virtual inline int ExactNumBottomBlobs() const { return 0; }
         virtual inline int ExactNumTopBlobs() const { return 2; }
+        virtual inline bool AutoTopBlobs() const { return true; }
 
     protected:
         shared_ptr<Caffe::RNG> prefetch_rng_;
