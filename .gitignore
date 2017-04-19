@@ -54,6 +54,7 @@
 
 # User's build configuration
 Makefile.config
+load_caffe_dependencies.sh
 
 # Data and models are either
 # 1. reference, and not casually committed
