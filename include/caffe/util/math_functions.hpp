@@ -147,6 +147,37 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 
 #ifndef CPU_ONLY  // GPU
 
+/* Begin caffe wrappers for cusolverDn */
+
+// Uses QR factorization to solve for X in either of 
+// op(A)*X = alpha*B          (if sideA == CblasLeft) or 
+// X*op(A) = alpha*B          (if sideA == CblasRight), where
+// op(A) = A                  (if transA == CblasNoTrans) or 
+// op(A) = transpose(A)       (transA == CblasTrans).
+// B, X are both M(rows)*N(cols). Dimensions of A are automatically inferred.
+// TAU is an empty array of length min(M,N). TAU and A are overwritten to
+// represent factor matrices Q,R efficiently using householder vectors. 
+// (see http://docs.nvidia.com/cuda/cusolver/index.html#cuds-lt-t-gt-geqrf)
+// B is overwritten to represent the desired solution X.
+// Workspace is an empty buffer of length Lwork used in intermediate
+// computations. You should query Lwork for given M, N using 
+// caffe_gpu_inverse_qr<Dtype>(M, N, A, Lwork);
+// and pre-allocate Workspace (at maybe LayerSetUp/ Reshape).
+// *devInfo is an integer (in device memory) denoting success(0) or failure(1).
+// Similar to other caffe_gpu_* funcs, this wrapper offers a simpler c-style
+// interface with inputs ordered in row-major & contiguous in memory, while
+// calling fortran-order cusolverDn gpu code under the hood.
+template <typename Dtype>
+void caffe_gpu_inverse_qr(const CBLAS_SIDE sideA, const CBLAS_TRANSPOSE transA,
+    const int M, const int N, const Dtype alpha, Dtype* A, Dtype* TAU,
+    Dtype* B, const int Lwork, Dtype* Workspace, int* devInfo);
+
+// Calculate Buffersize for QR factorization 
+template <typename Dtype>
+void caffe_gpu_inverse_qr(const int M, const int N, Dtype* A, int* Lwork);    
+
+/* End caffe wrappers for cusolverDn */
+
 // Decaf gpu gemm provides an interface that is almost the same as the cpu
 // gemm function - following the c convention and calling the fortran-order
 // gpu code under the hood.

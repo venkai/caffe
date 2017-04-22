@@ -10,6 +10,102 @@
 
 namespace caffe {
 
+/* Begin caffe wrappers for cusolverDn */
+
+template <>
+void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA, 
+    const CBLAS_TRANSPOSE TransA, const int M, const int N, const float alpha,
+    float* A, float* TAU, float* B, const int Lwork, float* Workspace,
+    int* devInfo) {
+  // Note: cusolverDn uses fortran-order
+  const int ldb = N;
+  int lda = (SideA == CblasLeft) ? M : N;
+  cublasSideMode_t cuSideA =
+      (SideA == CblasLeft) ? CUBLAS_SIDE_RIGHT : CUBLAS_SIDE_LEFT;
+  cublasOperation_t cuTransR =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransQ =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_T : CUBLAS_OP_N;
+  // First generate QR factorization of A
+  CUSOLVER_CHECK(cusolverDnSgeqrf(Caffe::cusolver_dn_handle(), lda, lda, A,
+      lda, TAU, Workspace, Lwork, devInfo));
+  if ((SideA == CblasLeft && TransA == CblasNoTrans) ||
+      (SideA == CblasRight && TransA == CblasTrans)) {
+    // First do trsm and then ormqr
+    // Pre/Post-Multiply B by inverse of R or R'
+    CUBLAS_CHECK(cublasStrsm(Caffe::cublas_handle(), cuSideA,
+        CUBLAS_FILL_MODE_UPPER, cuTransR, CUBLAS_DIAG_NON_UNIT, N, M, &alpha,
+        A, lda, B, ldb));
+    // Post/Pre-Multiply B by inverse of Q' or Q without generating Q
+    CUSOLVER_CHECK(cusolverDnSormqr(Caffe::cusolver_dn_handle(), cuSideA,
+      cuTransQ, N, M, lda, A, lda, TAU, B, ldb, Workspace, Lwork, devInfo));
+  } else {
+    // First do ormqr and then trsm
+    // Pre/Post-Multiply B by inverse of Q or Q' without generating Q
+    CUSOLVER_CHECK(cusolverDnSormqr(Caffe::cusolver_dn_handle(), cuSideA,
+      cuTransQ, N, M, lda, A, lda, TAU, B, ldb, Workspace, Lwork, devInfo));
+    // Post/Pre-Multiply B by inverse of R' or R
+    CUBLAS_CHECK(cublasStrsm(Caffe::cublas_handle(), cuSideA,
+        CUBLAS_FILL_MODE_UPPER, cuTransR, CUBLAS_DIAG_NON_UNIT, N, M, &alpha,
+        A, lda, B, ldb));
+  }
+}
+
+template <>
+void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA, 
+    const CBLAS_TRANSPOSE TransA, const int M, const int N, const double alpha,
+    double* A, double* TAU, double* B, const int Lwork, double* Workspace,
+    int* devInfo) {
+  // Note: cusolverDn uses fortran-order
+  const int ldb = N;
+  int lda = (SideA == CblasLeft) ? M : N;
+  cublasSideMode_t cuSideA =
+      (SideA == CblasLeft) ? CUBLAS_SIDE_RIGHT : CUBLAS_SIDE_LEFT;
+  cublasOperation_t cuTransR =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_N : CUBLAS_OP_T;
+  cublasOperation_t cuTransQ =
+      (TransA == CblasNoTrans) ? CUBLAS_OP_T : CUBLAS_OP_N;
+  // First generate QR factorization of A
+  CUSOLVER_CHECK(cusolverDnDgeqrf(Caffe::cusolver_dn_handle(), lda, lda, A,
+      lda, TAU, Workspace, Lwork, devInfo));
+  if ((SideA == CblasLeft && TransA == CblasNoTrans) ||
+      (SideA == CblasRight && TransA == CblasTrans)) {
+    // First do trsm and then ormqr
+    // Pre/Post-Multiply B by inverse of R or R'
+    CUBLAS_CHECK(cublasDtrsm(Caffe::cublas_handle(), cuSideA,
+        CUBLAS_FILL_MODE_UPPER, cuTransR, CUBLAS_DIAG_NON_UNIT, N, M, &alpha,
+        A, lda, B, ldb));
+    // Post/Pre-Multiply B by inverse of Q' or Q without generating Q
+    CUSOLVER_CHECK(cusolverDnDormqr(Caffe::cusolver_dn_handle(), cuSideA,
+      cuTransQ, N, M, lda, A, lda, TAU, B, ldb, Workspace, Lwork, devInfo));
+  } else {
+    // First do ormqr and then trsm
+    // Pre/Post-Multiply B by inverse of Q or Q' without generating Q
+    CUSOLVER_CHECK(cusolverDnDormqr(Caffe::cusolver_dn_handle(), cuSideA,
+      cuTransQ, N, M, lda, A, lda, TAU, B, ldb, Workspace, Lwork, devInfo));
+    // Post/Pre-Multiply B by inverse of R' or R
+    CUBLAS_CHECK(cublasDtrsm(Caffe::cublas_handle(), cuSideA,
+        CUBLAS_FILL_MODE_UPPER, cuTransR, CUBLAS_DIAG_NON_UNIT, N, M, &alpha,
+        A, lda, B, ldb));
+  }  
+}
+
+template <>
+void caffe_gpu_inverse_qr<float>(const int M, const int N, float* A,
+    int* Lwork) {
+  const int lda = M;
+  CUSOLVER_CHECK(cusolverDnSgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, A, lda, Lwork));
+}
+
+template <>
+void caffe_gpu_inverse_qr<double>(const int M, const int N, double* A,
+    int* Lwork) {
+  const int lda = M;
+  CUSOLVER_CHECK(cusolverDnDgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, A, lda, Lwork));
+}
+
 template <>
 void caffe_gpu_gemm<float>(const CBLAS_TRANSPOSE TransA,
     const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,

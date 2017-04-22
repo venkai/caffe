@@ -35,6 +35,7 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
 #include <cuda.h>
 #include <cuda_runtime.h>
 #include <curand.h>
+#include <cusolverDn.h>
 #include <driver_types.h>  // cuda driver types
 #ifdef USE_CUDNN  // cuDNN acceleration library.
 #include "caffe/util/cudnn.hpp"
@@ -58,6 +59,13 @@ void classname<Dtype>::funcname##_##gpu(const vector<Blob<Dtype>*>& top, \
     CHECK_EQ(status, CUBLAS_STATUS_SUCCESS) << " " \
       << caffe::cublasGetErrorString(status); \
   } while (0)
+      
+#define CUSOLVER_CHECK(condition) \
+  do { \
+    cusolverStatus_t status = condition; \
+    CHECK_EQ(status, CUSOLVER_STATUS_SUCCESS) << " " \
+      << caffe::cusolverGetErrorString(status); \
+  } while (0)
 
 #define CURAND_CHECK(condition) \
   do { \
@@ -79,6 +87,7 @@ namespace caffe {
 
 // CUDA: library error reporting.
 const char* cublasGetErrorString(cublasStatus_t error);
+const char* cusolverGetErrorString(cusolverStatus_t error);
 const char* curandGetErrorString(curandStatus_t error);
 
 // CUDA: use 512 threads per block
