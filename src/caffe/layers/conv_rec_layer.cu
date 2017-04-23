@@ -193,10 +193,6 @@ namespace caffe {
         } else {
             mid_.Reshape(old_mid_shape_);
         }
-        /*caffe_gpu_set(count, Dtype(0), mid_.mutable_gpu_data());
-        if (permute_diffs) {
-            caffe_gpu_set(count, Dtype(0), mid_.mutable_gpu_diff());
-        }*/
         //Start Permuting bottom blob data
         const Dtype* bottom_data = bottom[0]->gpu_data();
         Dtype* top_data = mid_.mutable_gpu_data();
@@ -238,15 +234,11 @@ namespace caffe {
         LOG(INFO) << "---- CASE 4 ----"; test_inverse_QR_case4();
         
         const Dtype* weights = this->blobs_[0]->mutable_gpu_data(); // Ni X No
-        //caffe_copy(top[0]->count(), bottom[0]->gpu_data(), top[0]->mutable_gpu_data());
-        const bool order_C_last = true;
-        const bool inv_order_C_last = false;
-        permute_blobs_gpu(bottom,order_C_last,false); // Permute bottom from NxCxHxW to (N*H*W) x C and copy to mid_
+        const bool channel_last = true;
+        const bool permute_diffs = true;
+        permute_blobs_gpu(bottom,channel_last,!permute_diffs); // Permute bottom from NxCxHxW to (N*H*W) x C and copy to mid_
         top[0]->ReshapeLike(mid_);
-        // caffe_copy(mid_.count(), mid_.gpu_data(), top[0]->mutable_gpu_data());
         if (!use_global_stats_) {
-            //this->blobs_[3]->mutable_cpu_data()[0] *= moving_average_fraction_;
-            //this->blobs_[3]->mutable_cpu_data()[0] += 1;
             caffe_gpu_scal<Dtype>(this->blobs_[3]->count(),moving_average_fraction_,this->blobs_[3]->mutable_gpu_data());
             caffe_gpu_add_scalar(this->blobs_[3]->count(), Dtype(1), this->blobs_[3]->mutable_gpu_data());
         }
@@ -265,7 +257,7 @@ namespace caffe {
             forward_BN_gpu(top,top,iter);
             
             if (iter == Nrec_ - 1) {
-                permute_blobs_gpu(top,inv_order_C_last,false); // Permute top from (N*H*W) x C to NxCxHxW and copy to mid_
+                permute_blobs_gpu(top,!channel_last,!permute_diffs); // Permute top from (N*H*W) x C to NxCxHxW and copy to mid_
                 top[0]->ReshapeLike(mid_);
                 caffe_copy(mid_.count(), mid_.gpu_data(), top[0]->mutable_gpu_data());
             } else {
@@ -282,13 +274,13 @@ namespace caffe {
         if (!this->param_propagate_down_[0] && !propagate_down[0]) {
             return;
         }
-        const bool order_C_last = true;
-        const bool inv_order_C_last = false;
+        const bool channel_last = true;
+        const bool permute_diffs = true;
         const Dtype* wt_inv_data = wt_inv_.gpu_data();
         const Dtype* weights = this->blobs_[0]->gpu_data();
         Dtype* weights_diff = this->blobs_[0]->mutable_gpu_diff();
         // mid_ <- top
-        permute_blobs_gpu(top,order_C_last,true);
+        permute_blobs_gpu(top,channel_last,permute_diffs);
         bottom[0]->ReshapeLike(mid_);
         caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
         caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
@@ -312,7 +304,7 @@ namespace caffe {
             caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
             caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
         }
-        permute_blobs_gpu(bottom,inv_order_C_last,true); // Permute bottom from (N*H*W) x C to NxCxHxW and copy to mid_
+        permute_blobs_gpu(bottom,!channel_last,permute_diffs); // Permute bottom from (N*H*W) x C to NxCxHxW and copy to mid_
         bottom[0]->ReshapeLike(mid_);
         caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
         caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
