@@ -51,7 +51,7 @@ namespace caffe {
         void backward_BN_gpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom, const int iter);
         void backward_ReLU_gpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom);
         
-        //temporary (for debugging)
+        // Temporary (for debugging)
         void test_print(const int M, const int N, Dtype* A);
         void test_QR();
         void test_inverse_QR_case1();
