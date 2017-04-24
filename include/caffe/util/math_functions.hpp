@@ -150,10 +150,10 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 /* Begin caffe wrappers for cusolverDn */
 
 // Uses QR factorization to solve for X in either of 
-// op(A)*X = alpha*B          (if sideA == CblasLeft) or 
-// X*op(A) = alpha*B          (if sideA == CblasRight), where
-// op(A) = A                  (if transA == CblasNoTrans) or 
-// op(A) = transpose(A)       (transA == CblasTrans).
+// op(A)*X = alpha*B          (if SideA == CblasLeft) or 
+// X*op(A) = alpha*B          (if SideA == CblasRight), where
+// op(A) = A                  (if TransA == CblasNoTrans) or 
+// op(A) = transpose(A)       (TransA == CblasTrans).
 // B, X are both M(rows)*N(cols). Dimensions of A are automatically inferred.
 // TAU is an empty array of length min(M,N). TAU and A are overwritten to
 // represent factor matrices Q,R efficiently using householder vectors. 
@@ -167,8 +167,9 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 // Similar to other caffe_gpu_* funcs, this wrapper offers a simpler c-style
 // interface with inputs ordered in row-major & contiguous in memory, while
 // calling fortran-order cusolverDn gpu code under the hood.
+// Note: A is assumed to be a well conditioned square matrix.
 template <typename Dtype>
-void caffe_gpu_inverse_qr(const CBLAS_SIDE sideA, const CBLAS_TRANSPOSE transA,
+void caffe_gpu_inverse_qr(const CBLAS_SIDE SideA, const CBLAS_TRANSPOSE TransA,
     const int M, const int N, const Dtype alpha, Dtype* A, Dtype* TAU,
     Dtype* B, const int Lwork, Dtype* Workspace, int* devInfo);
 
