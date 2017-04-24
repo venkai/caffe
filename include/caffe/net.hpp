@@ -85,6 +85,8 @@ class Net {
   Dtype ForwardBackward() {
     Dtype loss;
     Forward(&loss);
+    // zero-init the params
+    ClearParamDiffs();
     Backward();
     return loss;
   }
