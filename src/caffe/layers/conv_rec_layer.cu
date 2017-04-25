@@ -16,156 +16,35 @@ void RecursiveConvLayer<Dtype>::test_print(const int M, const int N, Dtype* A) {
 }
 
 template <typename Dtype>
-void RecursiveConvLayer<Dtype>::test_inverse_QR_case1() {
-  // Case1: AX=B
-  const int M = 3, N = 4;
-  
-  /*       | 1 2 3 |          | 9.860  6.000  3.400  3.250 |
-      *   A = | 4 5 6 |      B = | 22.04  15.00  9.370  7.480 |
-      *       | 2 1 1 |          | 4.290  4.000  2.840  1.620 |
-      *
-      *   Solving X for AX=B. 
-      *   Expected X = | 0.23  1.00  0.85  0.21 |
-      *                | 1.86  1.00  0.87  0.56 |
-      *                | 1.97  1.00  0.27  0.64 |
-      */
-  
-  /* In row major, */
-  float Aorig[M*M] = { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 2.0, 1.0, 1.0};
-  float Xorig[M*N] = { 0.23, 1, 0.85, 0.21, 1.86, 1, 0.87, 0.56, 1.97, 1, 0.27, 0.64  }; // exact solution
-  float Borig[M*N] = { 9.86, 6.0, 3.4, 3.25, 22.04, 15.0, 9.37, 7.48, 4.29, 4.0, 2.84, 1.62};
-  
-  for (int i = 0; i < M*M; ++i) { eye_.mutable_cpu_data()[i] = Dtype(Aorig[i]); }
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Borig[i]); }
-  int* devInfo = dev_info_.mutable_gpu_data();
-  LOG(INFO) << "Solving for X in A*X = B (in rowmajor), or X*A=B in column major, where";
-  printf("A = \n"); test_print(M,M,eye_.mutable_cpu_data());
-  printf("B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  caffe_gpu_inverse_qr(CblasLeft, CblasNoTrans, M, N, Dtype(1.0), eye_.mutable_gpu_data(), tau_.mutable_gpu_data(),
-  wt_buffer_.mutable_gpu_data(), Lwork_, workspace_.mutable_gpu_data(), devInfo);
-  LOG(INFO)<<"Results: ";
-  printf("Anew = \n"); test_print(M,M,eye_.mutable_cpu_data());
-  printf("TAU = \n"); test_print(1,M,tau_.mutable_cpu_data());
-  printf("Xhat = B*inv(R)*Q' = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data());
-  printf("Expected Solution X = \n");
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Xorig[i]); }
-  test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  printf("--------------------------------------------------------------------------\n");
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::test_inverse_QR_case2() {
-  // Case2: trans(A)*X=B
-  const int M = 3, N = 4;
-  
-  /*       | 1 4 2 |          | 9.860  6.000  3.400  3.250 |
-      *   A = | 2 5 1 |      B = | 22.04  15.00  9.370  7.480 |
-      *       | 3 6 1 |          | 4.290  4.000  2.840  1.620 |
-      *
-      *   Solving X for trans(A)*X=B. 
-      *   Expected X = | 0.23  1.00  0.85  0.21 |
-      *                | 1.86  1.00  0.87  0.56 |
-      *                | 1.97  1.00  0.27  0.64 |
-      */
-  
-  /* In row major, */
-  float Aorig[M*M] = { 1.0, 4.0, 2.0, 2.0, 5.0, 1.0, 3.0, 6.0, 1.0};
-  float Xorig[M*N] = { 0.23, 1, 0.85, 0.21, 1.86, 1, 0.87, 0.56, 1.97, 1, 0.27, 0.64  }; // exact solution
-  float Borig[M*N] = { 9.86, 6.0, 3.4, 3.25, 22.04, 15.0, 9.37, 7.48, 4.29, 4.0, 2.84, 1.62};
-  
-  for (int i = 0; i < M*M; ++i) { eye_.mutable_cpu_data()[i] = Dtype(Aorig[i]); }
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Borig[i]); }
-  int* devInfo = dev_info_.mutable_gpu_data();
-  LOG(INFO) << "Solving for X in trans(A)*X = B (in rowmajor), or X*trans(A)=B in column major, where";
-  printf("A = \n"); test_print(M,M,eye_.mutable_cpu_data());
-  printf("B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  caffe_gpu_inverse_qr(CblasLeft, CblasTrans, M, N, Dtype(1.0), eye_.mutable_gpu_data(), tau_.mutable_gpu_data(),
-  wt_buffer_.mutable_gpu_data(), Lwork_, workspace_.mutable_gpu_data(), devInfo);
-  LOG(INFO)<<"Results: ";
-  printf("Anew = \n"); test_print(M,M,eye_.mutable_cpu_data());
-  printf("TAU = \n"); test_print(1,M,tau_.mutable_cpu_data());
-  printf("Xhat = B*Q*inv(R') = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data());
-  printf("Expected Solution X = \n");
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Xorig[i]); }
-  test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  printf("--------------------------------------------------------------------------\n");
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::test_inverse_QR_case3() {
-  // Case3: X*trans(A)=B
-  const int M = 4, N = 3;
-  
-  /*       | 1 2 3 |                | 9.860  6.000  3.400  3.250 |
-      *   A = | 4 5 6 |     trans(B) = | 22.04  15.00  9.370  7.480 |
-      *       | 2 1 1 |                | 4.290  4.000  2.840  1.620 |
-      *
-      *   
-      *   Solving X for X*trans(A)=B. 
-      *   Expected trans(X) = | 0.23  1.00  0.85  0.21 |
-      *                       | 1.86  1.00  0.87  0.56 |
-      *                       | 1.97  1.00  0.27  0.64 |
-      */
-  
-  /* In row major, */
-  float Aorig[N*N] = { 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 2.0, 1.0, 1.0};
-  float Xorig[M*N] = { 0.23, 1.86, 1.97, 1.0, 1.0, 1.0, 0.85, 0.87, 0.27, 0.21, 0.56, 0.64}; // exact solution
-  float Borig[M*N] = { 9.86, 22.04, 4.29, 6.0, 15.0, 4.0, 3.4, 9.37, 2.84, 3.25, 7.48, 1.62};
-  
-  for (int i = 0; i < N*N; ++i) { eye_.mutable_cpu_data()[i] = Dtype(Aorig[i]); }
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Borig[i]); }
-  int* devInfo = dev_info_.mutable_gpu_data();
-  LOG(INFO) << "Solving for X in X*trans(A) = B (in rowmajor), or trans(A)*X=B in column major, where";
-  printf("A = \n"); test_print(N,N,eye_.mutable_cpu_data());
-  printf("B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  caffe_gpu_inverse_qr(CblasRight, CblasTrans, M, N, Dtype(1.0), eye_.mutable_gpu_data(), tau_.mutable_gpu_data(),
-  wt_buffer_.mutable_gpu_data(), Lwork_, workspace_.mutable_gpu_data(), devInfo);
-  LOG(INFO)<<"Results: ";
-  printf("Anew = \n"); test_print(N,N,eye_.mutable_cpu_data());
-  printf("TAU = \n"); test_print(1,N,tau_.mutable_cpu_data());
-  printf("Xhat = Q*inv(R')*B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data());
-  printf("Expected Solution X = \n");
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Xorig[i]); }
-  test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  printf("--------------------------------------------------------------------------\n");
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::test_inverse_QR_case4() {
-  // Case4: X*A=B
-  const int M = 4, N = 3;
-  
-  /*       | 1 4 2 |                | 9.860  6.000  3.400  3.250 |
-      *   A = | 2 5 1 |     trans(B) = | 22.04  15.00  9.370  7.480 |
-      *       | 3 6 1 |                | 4.290  4.000  2.840  1.620 |
-      *
-      *   Solving X for X*A=B. 
-      *   Expected trans(X) = | 0.23  1.00  0.85  0.21 |
-      *                       | 1.86  1.00  0.87  0.56 |
-      *                       | 1.97  1.00  0.27  0.64 |
-      */
-  
-  /* In row major, */
-  float Aorig[M*M] = { 1.0, 4.0, 2.0, 2.0, 5.0, 1.0, 3.0, 6.0, 1.0};
-  float Xorig[M*N] = { 0.23, 1.86, 1.97, 1.0, 1.0, 1.0, 0.85, 0.87, 0.27, 0.21, 0.56, 0.64}; // exact solution
-  float Borig[M*N] = { 9.86, 22.04, 4.29, 6.0, 15.0, 4.0, 3.4, 9.37, 2.84, 3.25, 7.48, 1.62};
-  
-  for (int i = 0; i < N*N; ++i) { eye_.mutable_cpu_data()[i] = Dtype(Aorig[i]); }
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Borig[i]); }
-  int* devInfo = dev_info_.mutable_gpu_data();
-  LOG(INFO) << "Solving for X in X*A = B (in rowmajor), or A*X=B in column major, where";
-  printf("A = \n"); test_print(N,N,eye_.mutable_cpu_data());
-  printf("B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  caffe_gpu_inverse_qr(CblasRight, CblasNoTrans, M, N, Dtype(1.0), eye_.mutable_gpu_data(), tau_.mutable_gpu_data(),
-  wt_buffer_.mutable_gpu_data(), Lwork_, workspace_.mutable_gpu_data(), devInfo);
-  LOG(INFO)<<"Results: ";
-  printf("Anew = \n"); test_print(N,N,eye_.mutable_cpu_data());
-  printf("TAU = \n"); test_print(1,N,tau_.mutable_cpu_data());
-  printf("Xhat = inv(R)*Q'*B = \n"); test_print(M,N,wt_buffer_.mutable_cpu_data());
-  printf("Expected Solution X = \n");
-  for (int i = 0; i < M*N; ++i) { wt_buffer_.mutable_cpu_data()[i] = Dtype(Xorig[i]); }
-  test_print(M,N,wt_buffer_.mutable_cpu_data()); printf("\n");
-  printf("--------------------------------------------------------------------------\n");
+void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
+  for (int i = 0; i < Nwts_; ++i) {
+    // Recover previous iter weights which solver update clobbered W <- W + G
+    caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(1),
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->mutable_gpu_data());
+    // wt_buffer_ = transpose(G) * W
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->gpu_data(),
+        (Dtype)0., wt_buffer_.mutable_gpu_data());
+    // A = wt_buffer_ - transpose(wt_buffer_) = G'*W - W'*G
+    caffe_gpu_absymm<Dtype>(C_, Dtype(1), Dtype(-1), wt_buffer_.gpu_data(),
+        A_.mutable_gpu_data());
+    // G <- A * W
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        A_.gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
+        this->blobs_[i]->mutable_gpu_diff());
+    // W <- W - G = (I - A)*W
+    caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(-1),
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->mutable_gpu_data());
+    // A <- I + A
+    caffe_gpu_axpy<Dtype>(A_.count(), Dtype(1), eye_.gpu_data(),
+        A_.mutable_gpu_data());
+    // Orthogonal weight update: W <- inv(A)*W; i.e. Wnew = inv(I+A)*(I-A)*Wold
+    // where A = G'*W - W'*G; and G is the original diff used by the solver.
+    caffe_gpu_inverse_qr(CblasLeft, CblasNoTrans, C_, C_, Dtype(1.0),
+        A_.mutable_gpu_data(), tau_.mutable_gpu_data(),
+        this->blobs_[i]->mutable_gpu_data(), Lwork_,
+        workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
+  }
 }
 
 template <typename Dtype>
@@ -228,11 +107,9 @@ void RecursiveConvLayer<Dtype>::permute_blobs_gpu(const vector<Blob<Dtype>*>& bo
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
-  LOG(INFO) << "---- CASE 1 ----"; test_inverse_QR_case1();
-  LOG(INFO) << "---- CASE 2 ----"; test_inverse_QR_case2();
-  LOG(INFO) << "---- CASE 3 ----"; test_inverse_QR_case3();
-  LOG(INFO) << "---- CASE 4 ----"; test_inverse_QR_case4();
-  
+  if (requires_orth_weight_update_) {
+    orth_weight_update_gpu();
+  }
   const bool channel_last = true;
   const bool permute_diffs = true;
   permute_blobs_gpu(bottom,channel_last,!permute_diffs); // Permute bottom from NxCxHxW to (N*H*W) x C and copy to mid_
@@ -303,7 +180,14 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   permute_blobs_gpu(bottom,!channel_last,permute_diffs); // Permute bottom from (N*H*W) x C to NxCxHxW and copy to mid_
   bottom[0]->ReshapeLike(mid_);
   caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
-  caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff()); 
+  caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+  
+  // The next forward pass will project the solver's regularized weight diffs
+  // on to the Tangent Space in the Stiefel manifold of the weights, and
+  // recompute the new weights using Cayley's transform. This will ensure that
+  // the weights always remain orthogonal in a natural way while simultaneously
+  // optimizing the problem at hand.
+  requires_orth_weight_update_ = true;
 }
 
 template <typename Dtype>

@@ -35,6 +35,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   virtual void Backward_gpu(const vector<Blob<Dtype>*>& top,
   const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
   
+  void orth_weight_update_cpu();
   void forward_activation_func_cpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
   void backward_activation_func_cpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom);
   void permute_blobs_cpu(const vector<Blob<Dtype>*>& bottom, vector<int> new_orders, bool permute_diffs);
@@ -43,6 +44,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   void backward_BN_cpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom, const int iter);
   void backward_ReLU_cpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom);
   
+  void orth_weight_update_gpu();
   void forward_activation_func_gpu(const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top);
   void backward_activation_func_gpu(const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom);
   void permute_blobs_gpu(const vector<Blob<Dtype>*>& bottom, bool channel_last, bool permute_diffs);
@@ -53,11 +55,6 @@ class RecursiveConvLayer : public Layer<Dtype> {
   
   // Temporary (for debugging)
   void test_print(const int M, const int N, Dtype* A);
-  void test_QR();
-  void test_inverse_QR_case1();
-  void test_inverse_QR_case2();
-  void test_inverse_QR_case3();
-  void test_inverse_QR_case4();
   
   // Buffer blobs
   Blob<Dtype> wt_buffer_; // C_ x C_ buffer used in Cayley transform
@@ -67,7 +64,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   Blob<Dtype> bn_mu_; // local BN mean: Nrec x No 
   Blob<Dtype> bn_sigma_; // local BN sigma: Nrec x No
   Blob<Dtype> temp_bn_sum_; // cache for backward BN: 1 x No 
-  Blob<Dtype> batch_sum_multiplier_; //All ones size of 1x (N_*H_*W_)
+  Blob<Dtype> batch_sum_multiplier_; // All ones size of 1x (N_*H_*W_)
   Blob<int> permute_order_;
   Blob<int> inv_permute_order_;
   Blob<int> old_steps_;
@@ -75,7 +72,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   // For cusolverDN
   Blob<Dtype> tau_; // C_ x 1 buffer used for QR factorization
   Blob<Dtype> workspace_; // buffer on GPU memory for cusolver functions
-  int Lwork_; //size of workspace_
+  int Lwork_; // size of workspace_
   Blob<int> dev_info_; // integer on gpu memory, describes if QR, SVD, etc was successful
   
   
@@ -89,8 +86,12 @@ class RecursiveConvLayer : public Layer<Dtype> {
   int Nwts_; // # of unique weights (<= Nrec_)
   int bn_param_offset_; // beginning index of global BN param blobs
   vector<int> rand_wt_order_; // Ordering of weights
-  vector<int> old_mid_shape_;
-  vector<int> new_mid_shape_;
+  vector<int> old_mid_shape_; // N*C*H*W
+  vector<int> new_mid_shape_; // N*H*W*C
+  
+  // Initialized "false" at LayerSetUp. Always "true" after first Backward Pass
+  bool requires_orth_weight_update_; 
+  
   // For Batch-Norm
   bool use_global_stats_;
   Dtype moving_average_fraction_;
