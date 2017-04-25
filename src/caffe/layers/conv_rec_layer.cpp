@@ -201,6 +201,9 @@ const vector<Blob<Dtype>*>& top) {
     new_steps_.mutable_cpu_data()[i] = 1;
   }
   
+  // We will make this true whenever any Backward pass is executed.
+  requires_orth_weight_update_ = false;
+  
   // To activate RecursiveConvLayer<Dtype>::Reshape the first time
   // Note that N_, H_, W_ can change but C_ can't change after LayerSetUp.
   N_ = 0; H_ = 0; W_ = 0; //} 
@@ -257,6 +260,12 @@ const vector<Blob<Dtype>*>& top) {
 #endif          
     break;
   }
+}
+
+template <typename Dtype>
+void RecursiveConvLayer<Dtype>::orth_weight_update_cpu() {
+  LOG(INFO) << "[Warning] orth_weight_update_cpu() not yet implemented."
+            << " Weights may no longer be orthogonal.";
 }
 
 /* Modified from the PermutationLayer implementation in 
@@ -322,6 +331,9 @@ void RecursiveConvLayer<Dtype>::permute_blobs_cpu(const vector<Blob<Dtype>*>& bo
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
+  if (requires_orth_weight_update_) {
+    orth_weight_update_cpu();
+  }
   const vector<int> order_C_last{0,2,3,1}; // (N,C,H,W) -> (N,H,W,C)
   const vector<int> inv_order_C_last{0,3,1,2}; // (N,H,W,C) -> (N,C,H,W)
   if (!use_global_stats_) {
@@ -433,6 +445,13 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   bottom[0]->ReshapeLike(mid_);
   caffe_copy(bottom[0]->count(), mid_.cpu_data(), bottom[0]->mutable_cpu_data());
   caffe_copy(bottom[0]->count(), mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  
+  // The next forward pass will project the solver's regularized weight diffs
+  // on to the Tangent Space in the Stiefel manifold of the weights, and
+  // recompute the new weights using Cayley's transform. This will ensure that
+  // the weights always remain orthogonal in a natural way while simultaneously
+  // optimizing the problem at hand.
+  requires_orth_weight_update_ = true;
 }
 
 template <typename Dtype>
