@@ -106,6 +106,8 @@ void caffe_gpu_inverse_qr<double>(const int M, const int N, double* A,
       M, N, A, lda, Lwork));
 }
 
+/* End caffe wrappers for cusolverDn */
+
 template <>
 void caffe_gpu_gemm<float>(const CBLAS_TRANSPOSE TransA,
     const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
