@@ -63,7 +63,6 @@ class RecursiveConvLayer : public Layer<Dtype> {
   Blob<Dtype> wt_buffer_; // C_ x C_ buffer used in Cayley transform
   Blob<Dtype> eye_; // Identity matrix C_ x C_
   Blob<Dtype> A_; // A = trans(G)*W - trans(W)*G, where G = diff(W)
-  Blob<Dtype> wt_inv_; // Copy of transposed inverse of weights
   Blob<Dtype> mid_;
   Blob<Dtype> bn_mu_; // local BN mean: Nrec x No 
   Blob<Dtype> bn_sigma_; // local BN sigma: Nrec x No
@@ -88,6 +87,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   int batch_size_; // Effective batch size : B = N*H*W
   int Nrec_; // # of recursive convolutions
   int Nwts_; // # of unique weights (<= Nrec_)
+  int bn_param_offset_; // beginning index of global BN param blobs
   vector<int> rand_wt_order_; // Ordering of weights
   vector<int> old_mid_shape_;
   vector<int> new_mid_shape_;

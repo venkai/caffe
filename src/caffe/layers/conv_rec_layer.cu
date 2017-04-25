@@ -233,22 +233,19 @@ const vector<Blob<Dtype>*>& top) {
   LOG(INFO) << "---- CASE 3 ----"; test_inverse_QR_case3();
   LOG(INFO) << "---- CASE 4 ----"; test_inverse_QR_case4();
   
-  const Dtype* weights = this->blobs_[0]->mutable_gpu_data(); // Ni X No
   const bool channel_last = true;
   const bool permute_diffs = true;
   permute_blobs_gpu(bottom,channel_last,!permute_diffs); // Permute bottom from NxCxHxW to (N*H*W) x C and copy to mid_
   top[0]->ReshapeLike(mid_);
   if (!use_global_stats_) {
-    caffe_gpu_scal<Dtype>(this->blobs_[3]->count(),moving_average_fraction_,this->blobs_[3]->mutable_gpu_data());
-    caffe_gpu_add_scalar(this->blobs_[3]->count(), Dtype(1), this->blobs_[3]->mutable_gpu_data());
+    caffe_gpu_scal<Dtype>(this->blobs_[bn_param_offset_ + 2]->count(),moving_average_fraction_,this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
+    caffe_gpu_add_scalar(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1), this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
   }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution
-    const int wt_offset = rand_wt_order_[iter] * C_ * C_;
-    // caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, num_outputs, num_inputs, (Dtype)1., bottom_data, wt_trans, (Dtype)0., top_data);
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_, (Dtype)1., mid_.gpu_data(), weights + wt_offset, (Dtype)0., top[0]->mutable_gpu_data());
-    
-    /*[Optional] Insert permutations, activation functions, batch-norm, etc here*/
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* weights = this->blobs_[wt_offset]->mutable_gpu_data(); // Ni X No
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_, (Dtype)1., mid_.gpu_data(), weights, (Dtype)0., top[0]->mutable_gpu_data());
     
     // Compute activation function in-place
     forward_activation_func_gpu(top,top); //a_{i+1} = \sigma(a_{i+1});
@@ -276,9 +273,6 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   }
   const bool channel_last = true;
   const bool permute_diffs = true;
-  const Dtype* wt_inv_data = wt_inv_.gpu_data();
-  const Dtype* weights = this->blobs_[0]->gpu_data();
-  Dtype* weights_diff = this->blobs_[0]->mutable_gpu_diff();
   // mid_ <- top
   permute_blobs_gpu(top,channel_last,permute_diffs);
   bottom[0]->ReshapeLike(mid_);
@@ -289,16 +283,18 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     backward_BN_gpu(bottom,bottom,iter);
     backward_activation_func_gpu(bottom,bottom);
     /* Invert data(bottom[0])*inv(W)->data(mid_), compute diff(W) and backprop diff(bottom[0])->diff(mid_)  */
-    const int wt_offset = rand_wt_order_[iter] * C_ * C_;
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* weights = this->blobs_[wt_offset]->gpu_data();
+    Dtype* weights_diff = this->blobs_[wt_offset]->mutable_gpu_diff();
     // First get BOTTOM data using the inverse of weights 
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_, (Dtype)1., bottom[0]->gpu_data(), wt_inv_data + wt_offset, (Dtype)0., mid_.mutable_gpu_data());
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_, (Dtype)1., bottom[0]->gpu_data(), weights, (Dtype)0., mid_.mutable_gpu_data());
     // Note: BOTTOM Data is now in mid_, TOP Data & Diff are still in bottom[0] 
     if (this->param_propagate_down_[0]) { // compute diff with respect to weights if needed
       // Standard SGD diff for W: pdv{loss}{W} = G
-      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_, (Dtype)1., mid_.gpu_data(), bottom[0]->gpu_diff(), (Dtype)1., weights_diff + wt_offset);
+      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_, (Dtype)1., mid_.gpu_data(), bottom[0]->gpu_diff(), (Dtype)1., weights_diff);
     }
     // Compute diff with respect to bottom activation (we must always do this, even if propagate_down[0] is false)
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_, (Dtype)1., bottom[0]->gpu_diff(), weights + wt_offset, (Dtype)0., mid_.mutable_gpu_diff());
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_, (Dtype)1., bottom[0]->gpu_diff(), weights, (Dtype)0., mid_.mutable_gpu_diff());
     // Note: BOTTOM Diff is now in mid_, TOP Data & Diff are still in bottom[0] 
     // Transfer Data & Diff from mid_ to bottom[0]
     caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
@@ -356,8 +352,8 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(const vector<Blob<Dtype>*>& botto
     caffe_gpu_gemv<Dtype>(CblasTrans, batch_size_, C_, inv_batch_size_, mid_.gpu_data(), batch_sum_multiplier_.gpu_data(), 0., bn_sigma_.mutable_gpu_data() + offset); // E((X-EX)^2)
     
     // Compute and save moving average
-    caffe_gpu_axpby(C_, Dtype(1), bn_mu_.gpu_data() + offset, moving_average_fraction_, this->blobs_[1]->mutable_gpu_data() + offset);
-    caffe_gpu_axpby(C_, bias_correction_factor_, bn_sigma_.gpu_data() + offset, moving_average_fraction_, this->blobs_[2]->mutable_gpu_data() + offset);
+    caffe_gpu_axpby(C_, Dtype(1), bn_mu_.gpu_data() + offset, moving_average_fraction_, this->blobs_[bn_param_offset_]->mutable_gpu_data() + offset);
+    caffe_gpu_axpby(C_, bias_correction_factor_, bn_sigma_.gpu_data() + offset, moving_average_fraction_, this->blobs_[bn_param_offset_ + 1]->mutable_gpu_data() + offset);
     
     // Compute Batch-St-dev = sqrt(Batch-Variance + epsilon)
     caffe_gpu_add_scalar(C_, eps_, bn_sigma_.mutable_gpu_data() + offset);
