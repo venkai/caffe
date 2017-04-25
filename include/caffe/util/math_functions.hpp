@@ -179,6 +179,11 @@ void caffe_gpu_inverse_qr(const int M, const int N, Dtype* A, int* Lwork);
 
 /* End caffe wrappers for cusolverDn */
 
+// General [anti]symmetrization: compute B = alpha*A + beta*transpose(A);
+template <typename Dtype>
+void caffe_gpu_absymm(const int N, const Dtype alpha, const Dtype beta,
+    const Dtype* A, Dtype* B);
+
 // Decaf gpu gemm provides an interface that is almost the same as the cpu
 // gemm function - following the c convention and calling the fortran-order
 // gpu code under the hood.
