@@ -108,6 +108,23 @@ void caffe_gpu_inverse_qr<double>(const int M, const int N, double* A,
 
 /* End caffe wrappers for cusolverDn */
 
+template <typename Dtype>
+__global__ void absymm_kernel(const int n, const Dtype alpha, const Dtype beta,
+    const Dtype* x, Dtype* y) {
+  CUDA_KERNEL_LOOP(index, n * n) {
+    y[index] = (alpha * x[index]) + (beta * x[((index % n)* n) + (index / n)]);
+  }
+}
+
+template <typename  Dtype>
+void caffe_gpu_absymm(const int N, const Dtype alpha, const Dtype beta,
+    const Dtype* A, Dtype* B) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  absymm_kernel<Dtype><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
+      N, alpha, beta, A, B);
+  CUDA_POST_KERNEL_CHECK;
+}
+
 template <>
 void caffe_gpu_gemm<float>(const CBLAS_TRANSPOSE TransA,
     const CBLAS_TRANSPOSE TransB, const int M, const int N, const int K,
