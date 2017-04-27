@@ -13,7 +13,7 @@ namespace caffe {
 /* Begin caffe wrappers for cusolverDn */
 
 template <>
-void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA, 
+void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA,
     const CBLAS_TRANSPOSE TransA, const int M, const int N, const float alpha,
     float* A, float* TAU, float* B, const int Lwork, float* Workspace,
     int* devInfo) {
@@ -52,7 +52,7 @@ void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA,
 }
 
 template <>
-void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA, 
+void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA,
     const CBLAS_TRANSPOSE TransA, const int M, const int N, const double alpha,
     double* A, double* TAU, double* B, const int Lwork, double* Workspace,
     int* devInfo) {
@@ -87,7 +87,7 @@ void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA,
     CUBLAS_CHECK(cublasDtrsm(Caffe::cublas_handle(), cuSideA,
         CUBLAS_FILL_MODE_UPPER, cuTransR, CUBLAS_DIAG_NON_UNIT, N, M, &alpha,
         A, lda, B, ldb));
-  }  
+  }
 }
 
 template <>

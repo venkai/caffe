@@ -149,18 +149,18 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 
 /* Begin caffe wrappers for cusolverDn */
 
-// Uses QR factorization to solve for X in either of 
-// op(A)*X = alpha*B          (if SideA == CblasLeft) or 
+// Uses QR factorization to solve for X in either of
+// op(A)*X = alpha*B          (if SideA == CblasLeft) or
 // X*op(A) = alpha*B          (if SideA == CblasRight), where
-// op(A) = A                  (if TransA == CblasNoTrans) or 
+// op(A) = A                  (if TransA == CblasNoTrans) or
 // op(A) = transpose(A)       (TransA == CblasTrans).
 // B, X are both M(rows)*N(cols). Dimensions of A are automatically inferred.
 // TAU is an empty array of length min(M,N). TAU and A are overwritten to
-// represent factor matrices Q,R efficiently using householder vectors. 
+// represent factor matrices Q,R efficiently using householder vectors.
 // (see http://docs.nvidia.com/cuda/cusolver/index.html#cuds-lt-t-gt-geqrf)
 // B is overwritten to represent the desired solution X.
 // Workspace is an empty buffer of length Lwork used in intermediate
-// computations. You should query Lwork for given M, N using 
+// computations. You should query Lwork for given M, N using
 // caffe_gpu_inverse_qr<Dtype>(M, N, A, Lwork);
 // and pre-allocate Workspace (at maybe LayerSetUp/ Reshape).
 // *devInfo is an integer (in device memory) denoting success(0) or failure(1).
@@ -173,9 +173,9 @@ void caffe_gpu_inverse_qr(const CBLAS_SIDE SideA, const CBLAS_TRANSPOSE TransA,
     const int M, const int N, const Dtype alpha, Dtype* A, Dtype* TAU,
     Dtype* B, const int Lwork, Dtype* Workspace, int* devInfo);
 
-// Calculate Buffersize for QR factorization 
+// Calculate Buffersize for QR factorization
 template <typename Dtype>
-void caffe_gpu_inverse_qr(const int M, const int N, Dtype* A, int* Lwork);    
+void caffe_gpu_inverse_qr(const int M, const int N, Dtype* A, int* Lwork);
 
 /* End caffe wrappers for cusolverDn */
 
