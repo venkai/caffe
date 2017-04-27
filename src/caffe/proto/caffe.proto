@@ -308,7 +308,7 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 148 (last added: recursive_conv_param)
+// LayerParameter next available layer-specific ID: 149 (last added: bn_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -364,6 +364,7 @@ message LayerParameter {
   optional ArgMaxParameter argmax_param = 103;
   optional BatchNormParameter batch_norm_param = 139;
   optional BiasParameter bias_param = 141;
+  optional BNParameter bn_param = 148;
   optional ConcatParameter concat_param = 104;
   optional ContrastiveLossParameter contrastive_loss_param = 105;
   optional ConvolutionParameter convolution_param = 106;
@@ -491,17 +492,6 @@ message ArgMaxParameter {
   optional int32 axis = 3;
 }
 
-message ConcatParameter {
-  // The axis along which to concatenate -- may be negative to index from the
-  // end (e.g., -1 for the last axis).  Other axes must have the
-  // same dimension for all the bottom blobs.
-  // By default, ConcatLayer concatenates blobs along the "channels" axis (1).
-  optional int32 axis = 2 [default = 1];
-
-  // DEPRECATED: alias for "axis" -- does not support negative indexing.
-  optional uint32 concat_dim = 1 [default = 1];
-}
-
 message BatchNormParameter {
   // If false, normalization is performed over the current mini-batch
   // and global statistics are accumulated (but not yet used) by a moving
@@ -554,6 +544,28 @@ message BiasParameter {
   // Default is the zero (0) initialization, resulting in the BiasLayer
   // initially performing the identity operation.
   optional FillerParameter filler = 3;
+}
+
+// Message that stores parameters used by BN (Batch Normalization)  layer
+message BNParameter {
+  enum BNMode {
+    LEARN = 0;
+    INFERENCE = 1;
+  }
+  optional BNMode bn_mode = 3 [default = LEARN];
+  optional FillerParameter scale_filler = 1;  // The filler for the scale
+  optional FillerParameter shift_filler = 2;  // The filler for the shift
+}
+
+message ConcatParameter {
+  // The axis along which to concatenate -- may be negative to index from the
+  // end (e.g., -1 for the last axis).  Other axes must have the
+  // same dimension for all the bottom blobs.
+  // By default, ConcatLayer concatenates blobs along the "channels" axis (1).
+  optional int32 axis = 2 [default = 1];
+
+  // DEPRECATED: alias for "axis" -- does not support negative indexing.
+  optional uint32 concat_dim = 1 [default = 1];
 }
 
 message ContrastiveLossParameter {
