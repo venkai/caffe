@@ -36,8 +36,8 @@ void EltwiseAccuracyLayer<Dtype>::Reshape(
 }
 
 template <typename Dtype>
-void EltwiseAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-    const vector<Blob<Dtype>*>& top) {
+void EltwiseAccuracyLayer<Dtype>::Forward_cpu(
+    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
   Dtype accuracy = 0;
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* bottom_label = bottom[1]->cpu_data();
@@ -49,8 +49,9 @@ void EltwiseAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
   vector<Dtype> maxval(top_k_+1);
   vector<int> max_id(top_k_+1);
   for (int i = 0; i < num; ++i) {
-    for (int j = 0; j < spatial_dim; j++){
-      const int label_value = static_cast<int>(bottom_label[i * spatial_dim + j]);
+    for (int j = 0; j < spatial_dim; ++j) {
+      const int label_value =
+          static_cast<int>(bottom_label[i * spatial_dim + j]);
       if (has_ignore_label_ && label_value == ignore_label_) {
         ignored_pixel_num++;
         continue;
@@ -73,7 +74,8 @@ void EltwiseAccuracyLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom
       }
     }
   }
-  top[0]->mutable_cpu_data()[0] = accuracy / (num * spatial_dim - ignored_pixel_num);
+  top[0]->mutable_cpu_data()[0] =
+      accuracy / (num * spatial_dim - ignored_pixel_num);
   // Accuracy layer should not be used as a loss function.
 }
 
