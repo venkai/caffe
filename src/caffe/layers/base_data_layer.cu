@@ -21,6 +21,23 @@ void BasePrefetchingDataLayer<Dtype>::Forward_gpu(
   }
 }
 
+/*
+ notice:
+ this code is based on the following implementation.
+ https://bitbucket.org/deeplab/deeplab-public/
+ */
+template <typename Dtype>
+void ImageDimPrefetchingDataLayer<Dtype>::Forward_gpu(
+    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  BasePrefetchingDataLayer<Dtype>::Forward_gpu(bottom, top);
+  if (output_data_dim_) {
+    // Reshape to loaded data-dims
+    top[2]->ReshapeLike(prefetch_data_dim_);
+    top[2]->set_gpu_data(prefetch_data_dim_.mutable_gpu_data());
+  }
+}
+
 INSTANTIATE_LAYER_GPU_FORWARD(BasePrefetchingDataLayer);
+INSTANTIATE_LAYER_GPU_FORWARD(ImageDimPrefetchingDataLayer);
 
 }  // namespace caffe
