@@ -1,0 +1,42 @@
+#ifndef CAFFE_IMAGE_SUPERRESOLUTION_DATA_LAYER_HPP_
+#define CAFFE_IMAGE_SUPERRESOLUTION_DATA_LAYER_HPP_
+
+#include <string>
+#include <utility>
+#include <vector>
+
+#include "caffe/layers/base_data_layer.hpp"
+
+namespace caffe {
+
+/**
+ * @brief Provides data to the Net from image files.
+ *
+ * TODO(dox): thorough documentation for Forward and proto params.
+ */
+template <typename Dtype>
+class ImageSuperResolutionDataLayer : public ImageDimPrefetchingDataLayer<Dtype> {
+ public:
+  explicit ImageSuperResolutionDataLayer(const LayerParameter& param)
+  : ImageDimPrefetchingDataLayer<Dtype>(param) {}
+  virtual ~ImageSuperResolutionDataLayer();
+  virtual void DataLayerSetUp(const vector<Blob<Dtype>*>& bottom,
+  const vector<Blob<Dtype>*>& top);
+  virtual inline const char* type() const { return "ImageData"; }
+  virtual inline int ExactNumBottomBlobs() const { return 0; }
+  virtual inline int ExactNumTopBlobs() const { return 3; }
+  virtual inline bool AutoTopBlobs() const { return true; }
+
+ protected:
+  Blob<Dtype> transformed_label_;
+  shared_ptr<Caffe::RNG> prefetch_rng_;
+  virtual void ShuffleImages();
+  virtual void load_batch(Batch<Dtype>* batch);
+
+  vector<std::string> lines_;
+  int lines_id_;
+};
+
+}  // namespace caffe
+
+#endif  // CAFFE_IMAGE_SUPERRESOLUTION_DATA_LAYER_HPP_
