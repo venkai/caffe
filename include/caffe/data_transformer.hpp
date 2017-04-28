@@ -1,6 +1,16 @@
 #ifndef CAFFE_DATA_TRANSFORMER_HPP
 #define CAFFE_DATA_TRANSFORMER_HPP
 
+#ifdef USE_OPENCV
+#include <opencv2/core/core.hpp>
+#include <opencv2/imgproc/imgproc.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#endif  // USE_OPENCV
+
+#include <boost/random/mersenne_twister.hpp>
+#include <boost/random/uniform_real.hpp>
+#include <boost/random/variate_generator.hpp>
+
 #include <vector>
 
 #include "caffe/blob.hpp"
@@ -51,6 +61,20 @@ class DataTransformer {
                 Blob<Dtype>* transformed_blob);
 
 #ifdef USE_OPENCV
+  // notice: this code is based on the following implementation.
+  // https://bitbucket.org/deeplab/deeplab-public/
+  void TransformImgAndSeg(const std::vector<cv::Mat>& cv_img_seg,
+      Blob<Dtype>* transformed_data_blob, Blob<Dtype>* transformed_label_blob,
+      const int ignore_label);
+
+  // Added by Venkat Oct-4-2016
+  void TransformInputAndLabel(const std::vector<cv::Mat>& cv_input_label,
+      Blob<Dtype>* transformed_data_blob, Blob<Dtype>* transformed_label_blob);
+
+  // Added by Venkat Oct-20-2016
+  void Transform_SR(const cv::Mat& cv_img_full,
+      Blob<Dtype>* transformed_data_blob, Blob<Dtype>* transformed_label_blob);
+
   /**
    * @brief Applies the transformation defined in the data layer's
    * transform_param block to a vector of Mat.
