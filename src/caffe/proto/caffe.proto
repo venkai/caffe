@@ -412,6 +412,10 @@ message LayerParameter {
   optional WindowDataParameter window_data_param = 129;
 }
 
+// NOTE
+// Update the next available ID when you add a new TransformationParameter
+// field.
+// TransformationParameter next available ID: 12 (last added: jpeg_param)
 // Message that stores parameters used to apply transformation
 // to the data layer's data
 message TransformationParameter {
@@ -833,6 +837,10 @@ message HingeLossParameter {
   optional Norm norm = 1 [default = L1];
 }
 
+// NOTE
+// Update the next available ID when you add a new ImageDataParameter field.
+//
+// ImageDataParameter next available ID: 20 (last added: is_label_seg)
 message ImageDataParameter {
   // Specify the data source.
   optional string source = 1;
@@ -852,6 +860,9 @@ message ImageDataParameter {
   optional bool is_color = 11 [default = true];
   // Specify if the labels are color or gray (for label type = PIXEL only)
   optional bool is_label_color = 18 [default = false];
+  // Specify if labels are semantic segmentations.
+  // If true, any resize operation on labels is via nearest-neighbor.
+  optional bool is_label_seg = 19 [default = false];
   // This is the value seg for pixels or images where we don't know the label
   optional int32 ignore_label = 15 [default = 255];
   optional int32 other_object_label = 17 [default = 0];
