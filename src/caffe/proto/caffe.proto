@@ -433,6 +433,16 @@ message TransformationParameter {
   optional bool force_color = 6 [default = false];
   // Force the decoded image to have 1 color channels.
   optional bool force_gray = 7 [default = false];
+
+  //Parameters for Super-Resolution exps
+  optional SuperResolutionParameter super_res_param = 8;
+  optional DownSampleParameter ds_param = 9;
+
+  //Parameters for Denoising exps
+  repeated WGNParameter wgn_param = 10;
+
+  //Parameters for JPEG deblocking exps
+  optional JPEGParameter jpeg_param = 11;
 }
 
 // Message that stores parameters shared by loss layers
@@ -688,6 +698,22 @@ message DataParameter {
   optional uint32 prefetch = 10 [default = 4];
 }
 
+// Used by TransformationParameter for Super-Resolution experiments.
+// Label is downsized by factor ds_scale to generate input.
+message DownSampleParameter {
+  enum Interp_mode {  // Same as in OpenCV
+      LINEAR = 1;
+      AREA = 2;
+      NEAREST = 3;
+      CUBIC = 4;
+      LANCZOS4 = 5;
+  }
+  // Interpolation for resizing
+  optional Interp_mode interp_mode = 1 [default = CUBIC];
+  optional int32 ds_scale = 2 [default = 2];
+  optional bool skip_small = 3 [default = true];
+}
+
 message DropoutParameter {
   optional float dropout_ratio = 1 [default = 0.5]; // dropout ratio
 }
@@ -824,6 +850,17 @@ message ImageDataParameter {
   optional uint32 new_width = 10 [default = 0];
   // Specify if the images are color or gray
   optional bool is_color = 11 [default = true];
+  // Specify if the labels are color or gray (for label type = PIXEL only)
+  optional bool is_label_color = 18 [default = false];
+  // This is the value seg for pixels or images where we don't know the label
+  optional int32 ignore_label = 15 [default = 255];
+  optional int32 other_object_label = 17 [default = 0];
+  enum LabelType {
+    NONE = 0;
+    IMAGE = 1;
+    PIXEL = 2;
+  }
+  optional LabelType label_type = 16 [default = IMAGE];
   // DEPRECATED. See TransformationParameter. For data pre-processing, we can do
   // simple scaling and subtracting the data mean, if provided. Note that the
   // mean subtraction is always carried out before scaling.
@@ -836,6 +873,8 @@ message ImageDataParameter {
   // data.
   optional bool mirror = 6 [default = false];
   optional string root_folder = 12 [default = ""];
+  optional bool has_label = 13 [default = true];
+  optional int32 max_labels = 14 [default = 1];
 }
 
 message InfogainLossParameter {
@@ -867,6 +906,13 @@ message InputParameter {
   // Define 1 shape to set the same shape for every top.
   // Define no shape to defer to reshaping manually.
   repeated BlobShape shape = 1;
+}
+
+// Used by TransformationParameter to provide random JPEG compression
+// in with JPEG quality factor uniformly randomly chosen with specified range.
+message JPEGParameter{
+    optional float min_quality = 2 [default = 4.0];
+    optional float max_quality = 3 [default = 50.0];
 }
 
 // Message that stores parameters used by LogLayer
@@ -1190,6 +1236,46 @@ message SoftmaxParameter {
   optional int32 axis = 2 [default = 1];
 }
 
+message SPPParameter {
+  enum PoolMethod {
+    MAX = 0;
+    AVE = 1;
+    STOCHASTIC = 2;
+  }
+  optional uint32 pyramid_height = 1;
+  optional PoolMethod pool = 2 [default = MAX]; // The pooling method
+  enum Engine {
+    DEFAULT = 0;
+    CAFFE = 1;
+    CUDNN = 2;
+  }
+  optional Engine engine = 6 [default = DEFAULT];
+}
+
+// Used by TransformationParameter for Super-Resolution experiments
+// with variable down-scaling. Input image is first down-sized by a factor
+// scale ~ U["min_sr_scale", "max_sr_scale"],
+// using interpolation specified by "down_interp_mode",
+// then converted to 8-bit unsigned-int (for realistic evaluation),
+// followed by up-sampling it to its original size
+// using "up_interp_mode" interpolation.
+message SuperResolutionParameter{
+  enum Interp_mode {  // Same as in OpenCV
+      LINEAR = 1;
+      AREA = 2;
+      NEAREST = 3;
+      CUBIC = 4;
+      LANCZOS4 = 5;
+  }
+  // Interpolation for resizing
+  optional Interp_mode interp_mode = 1 [default = LINEAR];
+  optional Interp_mode up_interp_mode = 2 [default = LINEAR];
+  optional Interp_mode down_interp_mode = 3 [default = LINEAR];
+  // Please note that max_sr_scale >= min_sr_scale >= 1
+  optional float min_sr_scale = 4 [default = 2.0];
+  optional float max_sr_scale = 5 [default = 4.0];
+}
+
 message TanHParameter {
   enum Engine {
     DEFAULT = 0;
@@ -1242,6 +1328,27 @@ message UnpoolingParameter {
   optional Engine engine = 11 [default = DEFAULT];
 }
 
+// Used by TransformationParameter for Denoising experiments.
+// White Gaussian Noise (WGN) of either fixed standard deviation "noise_std"
+// or variable ~ U("min_noise_std", "max_noise_std") is added to input image,
+// then converted to 8-bit unsigned-int (for realistic evaluation).
+// You can also repeat this parameter in your prototxt if you wish to train
+// from a fixed set of "noise_std"s and specify the probability of each noise
+// policy with param "prob".
+message WGNParameter{
+  // Probability of using this denoising policy
+  optional float prob = 1 [default = 1.00];
+  // Noise Standard deviation
+  optional float noise_std = 2 [default=25.0];
+  // You can also specify a range of std to randomly choose from.
+  // Specify EITHER both min_noise_std and max_noise_std,
+  // OR only noise_std,
+  // OR neither. You can't specify all 3.
+  // Please note that max_noise_std >= min_noise_std >= 0.
+  optional float min_noise_std = 3 [default = 8.0];
+  optional float max_noise_std = 4 [default = 50.0];
+}
+
 message WindowDataParameter {
   // Specify the data source.
   optional string source = 1;
@@ -1273,22 +1380,6 @@ message WindowDataParameter {
   optional bool cache_images = 12 [default = false];
   // append root_folder to locate images
   optional string root_folder = 13 [default = ""];
-}
-
-message SPPParameter {
-  enum PoolMethod {
-    MAX = 0;
-    AVE = 1;
-    STOCHASTIC = 2;
-  }
-  optional uint32 pyramid_height = 1;
-  optional PoolMethod pool = 2 [default = MAX]; // The pooling method
-  enum Engine {
-    DEFAULT = 0;
-    CAFFE = 1;
-    CUDNN = 2;
-  }
-  optional Engine engine = 6 [default = DEFAULT];
 }
 
 // DEPRECATED: use LayerParameter.
@@ -1404,6 +1495,7 @@ message V0LayerParameter {
     MAX = 0;
     AVE = 1;
     STOCHASTIC = 2;
+    CUSTOM = 3;
   }
   optional PoolMethod pool = 11 [default = MAX]; // The pooling method
   optional float dropout_ratio = 12 [default = 0.5]; // dropout ratio
