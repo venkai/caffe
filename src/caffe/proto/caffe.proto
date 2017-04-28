@@ -308,7 +308,8 @@ message ParamSpec {
 // NOTE
 // Update the next available ID when you add a new LayerParameter field.
 //
-// LayerParameter next available layer-specific ID: 150 (last added: unpooling_param)
+// LayerParameter next available layer-specific ID: 151
+// (last added: eltwise_accuracy_param)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -372,6 +373,7 @@ message LayerParameter {
   optional DataParameter data_param = 107;
   optional DropoutParameter dropout_param = 108;
   optional DummyDataParameter dummy_data_param = 109;
+  optional EltwiseAccuracyParameter eltwise_accuracy_param = 150;
   optional EltwiseParameter eltwise_param = 110;
   optional ELUParameter elu_param = 140;
   optional EmbedParameter embed_param = 137;
@@ -707,6 +709,16 @@ message DummyDataParameter {
   repeated uint32 channels = 3;
   repeated uint32 height = 4;
   repeated uint32 width = 5;
+}
+
+// Message that stores parameters used by EltwiseAccuracyLayer
+message EltwiseAccuracyParameter {
+  // When computing Eltwise Accuracy, count as correct by
+  // comparing the true label to the top k scoring classes.
+  // By default, only compare to the top scoring class (i.e. argmax).
+  optional uint32 top_k = 1 [default = 1];
+  // If specified, ignore instances with the given label.
+  optional int32 ignore_label = 2;
 }
 
 message EltwiseParameter {
