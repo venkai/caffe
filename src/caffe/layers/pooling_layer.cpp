@@ -3,7 +3,6 @@
 #include <vector>
 
 #include "caffe/layers/pooling_layer.hpp"
-#include "caffe/util/math_functions.hpp"
 
 namespace caffe {
 
@@ -68,8 +67,10 @@ void PoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     CHECK(this->layer_param_.pooling_param().pool()
         == PoolingParameter_PoolMethod_AVE
         || this->layer_param_.pooling_param().pool()
-        == PoolingParameter_PoolMethod_MAX)
-        << "Padding implemented only for average and max pooling.";
+        == PoolingParameter_PoolMethod_MAX
+        || this->layer_param_.pooling_param().pool()
+        == PoolingParameter_PoolMethod_CUSTOM)
+        << "Padding implemented only for average, max and custom pooling.";
     CHECK_LT(pad_h_, kernel_h_);
     CHECK_LT(pad_w_, kernel_w_);
   }
@@ -218,6 +219,27 @@ void PoolingLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
       }
     }
     break;
+  case PoolingParameter_PoolMethod_CUSTOM: {
+    const Dtype* bottom_mask = bottom[1]->cpu_data();
+    caffe_set(top_count, Dtype(0), top_data);
+    // The main loop
+    for (int n = 0; n < bottom[0]->num(); ++n) {
+      for (int c = 0; c < channels_; ++c) {
+        for (int ph = 0; ph < pooled_height_; ++ph) {
+          for (int pw = 0; pw < pooled_width_; ++pw) {
+            const int index = ph * pooled_width_ + pw;
+            const int custom_index = bottom_mask[index];
+            top_data[index] = bottom_data[custom_index];
+          }
+        }
+        // compute offset
+        bottom_data += bottom[0]->offset(0, 1);
+        top_data += top[0]->offset(0, 1);
+        bottom_mask += top[0]->offset(0, 1);
+      }
+    }
+    break;
+  }
   case PoolingParameter_PoolMethod_STOCHASTIC:
     NOT_IMPLEMENTED;
     break;
@@ -298,6 +320,26 @@ void PoolingLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
       }
     }
     break;
+  case PoolingParameter_PoolMethod_CUSTOM: {
+    const Dtype* bottom_mask = bottom[1]->cpu_data();
+    // The main loop
+    for (int n = 0; n < top[0]->num(); ++n) {
+      for (int c = 0; c < channels_; ++c) {
+        for (int ph = 0; ph < pooled_height_; ++ph) {
+          for (int pw = 0; pw < pooled_width_; ++pw) {
+            const int index = ph * pooled_width_ + pw;
+            const int custom_index = bottom_mask[index];
+            bottom_diff[custom_index] += top_diff[index];
+          }
+        }
+        // compute offset
+        bottom_diff += bottom[0]->offset(0, 1);
+        top_diff += top[0]->offset(0, 1);
+        bottom_mask += top[0]->offset(0, 1);
+      }
+    }
+    break;
+  }
   case PoolingParameter_PoolMethod_STOCHASTIC:
     NOT_IMPLEMENTED;
     break;
