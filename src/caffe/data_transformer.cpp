@@ -652,22 +652,6 @@ void DataTransformer<Dtype>::TransformInputAndLabel(
   if (param_.has_super_res_param()) {
     const float min_sr = param_.super_res_param().min_sr_scale();
     const float max_sr = param_.super_res_param().max_sr_scale();
-    CHECK(min_sr >= 1 && max_sr >= min_sr)
-        << "max_sr_scale >= min_sr_scale >= 1.";
-    CHECK((param_.super_res_param().has_interp_mode() &&
-        !param_.super_res_param().has_down_interp_mode() &&
-        !param_.super_res_param().has_up_interp_mode()) ||
-        (!param_.super_res_param().has_interp_mode() &&
-        param_.super_res_param().has_down_interp_mode() &&
-        param_.super_res_param().has_up_interp_mode()) ||
-        (!param_.super_res_param().has_interp_mode() &&
-        !param_.super_res_param().has_down_interp_mode() &&
-        !param_.super_res_param().has_up_interp_mode()))
-    << "\n\nSpecify EITHER no interpolation (everything defaults to BILINEAR),"
-    << "\nOR specify only interp_mode (used for both up/down sampling),"
-    << "\nOR separately specify down_interp_mode/up_interp_mode "
-    << "(without specifying interp_mode).";
-
     float rand_sr = 3.0;
     if (max_sr == min_sr) {
       rand_sr = max_sr;
@@ -713,7 +697,7 @@ void DataTransformer<Dtype>::TransformInputAndLabel(
     if (num_wgn_policies > 1) {
       std::vector<double> probabilities;
       double prob_sum = 0;
-      for (unsigned int i = 0; i < num_wgn_policies; i++) {
+      for (int i = 0; i < num_wgn_policies; ++i) {
         double prob = 0.0;
         if (param_.wgn_param(i).has_prob()) {
           prob = param_.wgn_param(i).prob();
@@ -729,27 +713,13 @@ void DataTransformer<Dtype>::TransformInputAndLabel(
       policy_num = roll_weighted_die(probabilities);
     }
     const WGNParameter wgn_param = param_.wgn_param(policy_num);
-    CHECK((wgn_param.has_noise_std() && !wgn_param.has_min_noise_std()
-        && !wgn_param.has_max_noise_std()) ||
-        (!wgn_param.has_noise_std() && wgn_param.has_min_noise_std()
-        && wgn_param.has_max_noise_std()) ||
-        (!wgn_param.has_noise_std() && !wgn_param.has_min_noise_std()
-        && !wgn_param.has_max_noise_std()))
-        << "\n\nSpecify EITHER no noise std (defaults to 25), "
-        << "OR specify only noise_std,\n"
-        << "OR separately specify min_noise_std/max_noise_std "
-        << "(without specifying noise_std).";
     float noise_std = 0.0;
     if (wgn_param.has_noise_std() || (!wgn_param.has_min_noise_std()
         && !wgn_param.has_max_noise_std())) {
-      CHECK_GE(wgn_param.noise_std(), 0);
       noise_std = wgn_param.noise_std();
     } else if (wgn_param.min_noise_std() == wgn_param.max_noise_std()) {
-      CHECK_GE(wgn_param.min_noise_std(), 0);
       noise_std = wgn_param.min_noise_std();
     } else {
-      CHECK_GE(wgn_param.min_noise_std(), 0);
-      CHECK_GE(wgn_param.max_noise_std(), wgn_param.min_noise_std());
       caffe_rng_uniform(1, wgn_param.min_noise_std(),
           wgn_param.max_noise_std(), &noise_std);
     }
@@ -768,8 +738,6 @@ void DataTransformer<Dtype>::TransformInputAndLabel(
   if (param_.has_jpeg_param()) {
     const float min_quality = param_.jpeg_param().min_quality();
     const float max_quality = param_.jpeg_param().max_quality();
-    CHECK(min_quality >= 1 && max_quality >= min_quality)
-        << "max_quality >= min_quality >= 1.";
     float rand_quality = 20.0;
     if (max_quality == min_quality) {
       rand_quality = max_quality;
