@@ -25,6 +25,10 @@ ImageRegressionDataLayer<Dtype>::~ImageRegressionDataLayer<Dtype>() {
 template <typename Dtype>
 void ImageRegressionDataLayer<Dtype>::DataLayerSetUp(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
+  CHECK(!this->layer_param_.image_data_param().is_label_seg() &&
+        !this->layer_param_.image_data_param().has_ignore_label())
+      << "is_label_seg and ignore_label are for Semantic Segmentation.\n"
+      << "Please use ImageSegDataLayer or WindowSegDataLayer instead.";  
   const int new_height = this->layer_param_.image_data_param().new_height();
   const int new_width  = this->layer_param_.image_data_param().new_width();
   const bool is_color  = this->layer_param_.image_data_param().is_color();
@@ -36,8 +40,6 @@ void ImageRegressionDataLayer<Dtype>::DataLayerSetUp(
       << "ImageRegressionDataLayer only supports label_type: PIXEL or NONE.";
   TransformationParameter transform_param
       = this->layer_param_.transform_param();
-  CHECK(!transform_param.has_mean_file())
-      << "ImageRegressionDataLayer does not support mean file";
   CHECK((new_height == 0 && new_width == 0) ||
       (new_height > 0 && new_width > 0))
       << "Current implementation requires "
