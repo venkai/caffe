@@ -1,23 +1,20 @@
-#include <stdio.h>
 #include <algorithm>
 #include <vector>
 #include "caffe/layers/conv_rec_layer.hpp"
 
 namespace caffe {
 
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::test_print(const int M, const int N,
-    Dtype* A) {
-  for (int i = 0; i < M; ++i) {
-    for (int j = 0; j < N; ++j) {
-      printf("%0.4f\t", A[(i * N) + j]);
-    }
-    printf("\n");
-  }
-}
-
+// Projects the normalized/regularized Gradient computed by previous solver
+// iteration onto the tangent space in the Stiefel Manifold of the orthogonal
+// weights from the previous iteration. Subsequently a descent curve based on
+// Cayley's transform is used to determine the new weights. Such a procedure
+// ensures that weights remain orthogonal while simultaneously optimizing the
+// problem at hand. Note that the solver gradient can correspond to any of the
+// pre-existing solver configurations like SGD, RMSProp, Adam, Momentum, etc.
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
+  // Called by Forward_gpu whenever any Backward pass
+  // is executed in the previous iteration.
   for (int i = 0; i < Nwts_; ++i) {
     // Recover previous iter weights which solver update clobbered W <- W + G
     caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(1),
@@ -50,8 +47,9 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
 
 template <typename Dtype>
 __global__ void PermuteKernel(const int nthreads, const int num_axes,
-    const int* old_steps, const int* new_steps, const int* new_orders,
-    const Dtype* bottom_data, Dtype* top_data) {
+    const int* const old_steps, const int* const new_steps,
+    const int* const new_orders, const Dtype* const bottom_data,
+    Dtype* const top_data) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     int old_idx = 0, idx = index;
     for (int j = 0; j < num_axes; ++j) {
@@ -62,168 +60,63 @@ __global__ void PermuteKernel(const int nthreads, const int num_axes,
   }
 }
 
-/* Modified from the PermutationLayer implementation in 
+/* Modified from the PermutationLayer implementation in
   https://github.com/BVLC/caffe/commit/b68695db42aa79e874296071927536363fe1efbf
   by Wei Liu : https://github.com/weiliu89 */
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::permute_blobs_gpu(
     const vector<Blob<Dtype>*>& bottom, const bool channel_last,
     const bool permute_diffs) {
-  const int num_axes = bottom[0]->num_axes();
+  // Called by both Forward_gpu and Backward_gpu.
+  // Permute input blob (data or diff) from N*C*H*W to N*H*W*C or vice-versa.
+  // The permuted blob is stored in the buffer mid_.
   if (channel_last) {
     mid_.Reshape(new_mid_shape_);
   } else {
     mid_.Reshape(old_mid_shape_);
   }
   // Start permuting bottom blob data
-  const Dtype* bottom_data = bottom[0]->gpu_data();
-  Dtype* top_data = mid_.mutable_gpu_data();
+  const Dtype* const bottom_data = bottom[0]->gpu_data();
+  Dtype* const top_data = mid_.mutable_gpu_data();
   if (channel_last) {
     // NOLINT_NEXT_LINE(whitespace/operators)
     PermuteKernel<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
-        count_, num_axes, old_steps_.gpu_data(), new_steps_.gpu_data(),
+        count_, num_axes_, old_steps_.gpu_data(), new_steps_.gpu_data(),
         permute_order_.gpu_data(), bottom_data, top_data);
     CUDA_POST_KERNEL_CHECK;
   } else {
     // NOLINT_NEXT_LINE(whitespace/operators)
     PermuteKernel<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
-        count_, num_axes, new_steps_.gpu_data(), old_steps_.gpu_data(),
+        count_, num_axes_, new_steps_.gpu_data(), old_steps_.gpu_data(),
         inv_permute_order_.gpu_data(), bottom_data, top_data);
     CUDA_POST_KERNEL_CHECK;
   }
   if (!permute_diffs) { return; }
   // Start permuting bottom blob diffs
-  const Dtype* bottom_diff = bottom[0]->gpu_diff();
-  Dtype* top_diff = mid_.mutable_gpu_diff();
+  const Dtype* const bottom_diff = bottom[0]->gpu_diff();
+  Dtype* const top_diff = mid_.mutable_gpu_diff();
   if (channel_last) {
     // NOLINT_NEXT_LINE(whitespace/operators)
     PermuteKernel<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
-        count_, num_axes, old_steps_.gpu_data(), new_steps_.gpu_data(),
+        count_, num_axes_, old_steps_.gpu_data(), new_steps_.gpu_data(),
         permute_order_.gpu_data(), bottom_diff, top_diff);
     CUDA_POST_KERNEL_CHECK;
   } else {
     // NOLINT_NEXT_LINE(whitespace/operators)
     PermuteKernel<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
-        count_, num_axes, new_steps_.gpu_data(), old_steps_.gpu_data(),
+        count_, num_axes_, new_steps_.gpu_data(), old_steps_.gpu_data(),
         inv_permute_order_.gpu_data(), bottom_diff, top_diff);
     CUDA_POST_KERNEL_CHECK;
   }
 }
 
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
-const vector<Blob<Dtype>*>& top) {
-  if (requires_orth_weight_update_) {
-    orth_weight_update_gpu();
-  }
-  const bool channel_last = true;
-  const bool permute_diffs = true;
-  // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
-  permute_blobs_gpu(bottom, channel_last, !permute_diffs);
-  top[0]->ReshapeLike(mid_);
-  if (!use_global_stats_) {
-    caffe_gpu_scal<Dtype>(this->blobs_[bn_param_offset_ + 2]->count(),
-        moving_average_fraction_,
-        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
-    caffe_gpu_add_scalar(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1),
-        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
-  }
-  for (int iter = 0; iter < Nrec_; ++iter) {
-    // Standard 1x1 convolution
-    const int wt_offset = rand_wt_order_[iter];
-    const Dtype* weights = this->blobs_[wt_offset]->gpu_data();
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
-        (Dtype)1., mid_.gpu_data(), weights, (Dtype)0.,
-        top[0]->mutable_gpu_data());
-    // Compute activation function in-place
-    forward_activation_func_gpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
-    // Apply BN in-place
-    forward_BN_gpu(top, top, iter);
-    if (iter == Nrec_ - 1) {
-      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
-      permute_blobs_gpu(top, !channel_last, !permute_diffs);
-      top[0]->ReshapeLike(mid_);
-      caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
-    } else {
-      // mid_ <- top; //a_i <- a_{i+1};
-      caffe_copy(count_, top[0]->gpu_data(), mid_.mutable_gpu_data());
-    }
-  }
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
-const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-  if (!this->param_propagate_down_[0] && !propagate_down[0]) {
-    return;
-  }
-  const bool channel_last = true;
-  const bool permute_diffs = true;
-  // Permute top data & diffs from N*C*H*W to N*H*W*C and copy to mid_
-  permute_blobs_gpu(top, channel_last, permute_diffs);
-  bottom[0]->ReshapeLike(mid_);
-  caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
-  caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
-  // TOP Data & Diff are now in BOTTOM, permuted in order (N*H*W) x C
-  for (int iter = Nrec_ - 1; iter >= 0; --iter) {
-    backward_BN_gpu(bottom, bottom, iter);
-    backward_activation_func_gpu(bottom, bottom);
-    // Invert data (bottom[0])*inv(W)->data(mid_),
-    // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
-    const int wt_offset = rand_wt_order_[iter];
-    const Dtype* weights = this->blobs_[wt_offset]->gpu_data();
-    Dtype* weights_diff = this->blobs_[wt_offset]->mutable_gpu_diff();
-    // First get BOTTOM data using the inverse of weights
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
-        (Dtype)1., bottom[0]->gpu_data(), weights, (Dtype)0.,
-        mid_.mutable_gpu_data());
-    // Note: BOTTOM Data is now in mid_, TOP Data & Diff still in bottom[0]
-    // Compute diff with respect to weights if needed
-    if (this->param_propagate_down_[0]) {
-      // Standard SGD diff for W: pdv{loss}{W} = G
-      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_,
-          (Dtype)1., mid_.gpu_data(), bottom[0]->gpu_diff(), (Dtype)1.,
-          weights_diff);
-    }
-    // Compute diff with respect to bottom activation.
-    // We must always do this, even if propagate_down[0] is false.
-    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
-        (Dtype)1., bottom[0]->gpu_diff(), weights, (Dtype)0.,
-        mid_.mutable_gpu_diff());
-    // Note: BOTTOM Diff is now in mid_, TOP Data & Diff are still in bottom[0]
-    // Transfer Data & Diff from mid_ to bottom[0]
-    caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
-    caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
-  }
-  // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
-  permute_blobs_gpu(bottom, !channel_last, permute_diffs);
-  bottom[0]->ReshapeLike(mid_);
-  caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
-  caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
-
-  // The next forward pass will project the solver's regularized weight diffs
-  // on to the Tangent Space in the Stiefel manifold of the weights, and
-  // recompute the new weights using Cayley's transform. This will ensure that
-  // the weights always remain orthogonal in a natural way while simultaneously
-  // optimizing the problem at hand.
-  requires_orth_weight_update_ = true;
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::forward_activation_func_gpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  RecursiveConvLayer<Dtype>::forward_ReLU_gpu(bottom, top);
-}
-
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::backward_activation_func_gpu(
-    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) {
-  RecursiveConvLayer<Dtype>::backward_ReLU_gpu(top, bottom);
-}
+// ----------------------------------------------------------------------------
+// ---------------------- Helpers for FORWARD PASS ----------------------------
+// ----------------------------------------------------------------------------
 
 template <typename Dtype>
 __global__ void ReLUForward(const int nthreads, const Dtype negative_slope,
-    const Dtype* bottom_data, Dtype* top_data) {
+    const Dtype* const bottom_data, Dtype* const top_data) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     top_data[index] = bottom_data[index] > 0 ?
         bottom_data[index] : bottom_data[index] * negative_slope;
@@ -232,9 +125,9 @@ __global__ void ReLUForward(const int nthreads, const Dtype negative_slope,
 
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::forward_ReLU_gpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  const Dtype* bottom_data = bottom[0]->gpu_data();
-  Dtype* top_data = top[0]->mutable_gpu_data();
+    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) const {
+  const Dtype* const bottom_data = bottom[0]->gpu_data();
+  Dtype* const top_data = top[0]->mutable_gpu_data();
   // NOLINT_NEXT_LINE(whitespace/operators)
   ReLUForward<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
       count_, negative_slope_, bottom_data, top_data);
@@ -246,8 +139,8 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top,
     const int iter) {
   const int offset = iter * C_;
-  const Dtype* bottom_data = bottom[0]->gpu_data();
-  Dtype* top_data = top[0]->mutable_gpu_data();
+  const Dtype* const bottom_data = bottom[0]->gpu_data();
+  Dtype* const top_data = top[0]->mutable_gpu_data();
   if (bottom[0] != top[0]) {
     caffe_copy(count_, bottom_data, top_data);
   }
@@ -288,20 +181,91 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(
 }
 
 template <typename Dtype>
+void RecursiveConvLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
+const vector<Blob<Dtype>*>& top) {
+  if (requires_orth_weight_update_) {
+    orth_weight_update_gpu();
+  }
+  const bool channel_last = true;
+  const bool permute_diffs = true;
+  // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
+  permute_blobs_gpu(bottom, channel_last, !permute_diffs);
+  top[0]->ReshapeLike(mid_);
+  if (!use_global_stats_) {
+    caffe_gpu_scal<Dtype>(this->blobs_[bn_param_offset_ + 2]->count(),
+        moving_average_fraction_,
+        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
+    caffe_gpu_add_scalar(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1),
+        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
+  }
+  for (int iter = 0; iter < Nrec_; ++iter) {
+    // Standard 1x1 convolution
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* const weights = this->blobs_[wt_offset]->gpu_data();
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
+        (Dtype)1., mid_.gpu_data(), weights, (Dtype)0.,
+        top[0]->mutable_gpu_data());
+    // Compute activation function in-place
+    forward_activation_func_gpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
+    // Apply BN in-place
+    forward_BN_gpu(top, top, iter);
+    if (iter == Nrec_ - 1) {
+      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
+      permute_blobs_gpu(top, !channel_last, !permute_diffs);
+      top[0]->ReshapeLike(mid_);
+      caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
+    } else {
+      // mid_ <- top; //a_i <- a_{i+1};
+      caffe_copy(count_, top[0]->gpu_data(), mid_.mutable_gpu_data());
+    }
+  }
+}
+
+// ----------------------------------------------------------------------------
+// --------------------- Helpers for BACKWARD PASS ----------------------------
+// ----------------------------------------------------------------------------
+
+template <typename Dtype>
+__global__ void ReLUBackward(const int nthreads, const Dtype negative_slope,
+    const Dtype inv_negative_slope, const Dtype* const top_data,
+    const Dtype* const top_diff, Dtype* const bottom_data,
+    Dtype* const bottom_diff) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+    bottom_diff[index] = top_data[index] > 0 ?
+        top_diff[index] : top_diff[index] * negative_slope;
+    bottom_data[index] = top_data[index] > 0 ?
+        top_data[index] : top_data[index] * inv_negative_slope;
+  }
+}
+
+template <typename Dtype>
+void RecursiveConvLayer<Dtype>::backward_ReLU_gpu(
+    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) const {
+  const Dtype* const top_data = top[0]->gpu_data();
+  Dtype* const bottom_data = bottom[0]->mutable_gpu_data();
+  const Dtype* const top_diff = top[0]->gpu_diff();
+  Dtype* const bottom_diff = bottom[0]->mutable_gpu_diff();
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  ReLUBackward<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
+    count_, negative_slope_, inv_negative_slope_, top_data, top_diff,
+    bottom_data, bottom_diff);
+  CUDA_POST_KERNEL_CHECK;
+}
+
+template <typename Dtype>
 void RecursiveConvLayer<Dtype>::backward_BN_gpu(
     const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom,
     const int iter) {
   const int offset = iter * C_;
-  Dtype* bottom_data = bottom[0]->mutable_gpu_data();
-  const Dtype* top_data = top[0]->gpu_data();
-  Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
-  const Dtype* top_diff;
-  if (bottom[0] != top[0]) {
-    top_diff = top[0]->gpu_diff();
-  } else {
+  if (bottom[0] == top[0]) {
     caffe_copy(count_, top[0]->gpu_diff(), mid_.mutable_gpu_diff());
-    top_diff = mid_.gpu_diff();
   }
+  Dtype* const bottom_data = bottom[0]->mutable_gpu_data();
+  const Dtype* const top_data = top[0]->gpu_data();
+  Dtype* const bottom_diff = bottom[0]->mutable_gpu_diff();
+  const Dtype* const top_diff =
+      bottom[0] == top[0] ? mid_.gpu_diff() : top[0]->gpu_diff();
+
   // Replicate Batch-St-dev to input size
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)1., batch_sum_multiplier_.gpu_data(),
@@ -361,29 +325,61 @@ void RecursiveConvLayer<Dtype>::backward_BN_gpu(
 }
 
 template <typename Dtype>
-__global__ void ReLUBackward(const int nthreads, const Dtype negative_slope,
-    const Dtype inv_negative_slope, const Dtype* top_data,
-    const Dtype* top_diff, Dtype* bottom_data, Dtype* bottom_diff) {
-  CUDA_KERNEL_LOOP(index, nthreads) {
-    bottom_diff[index] = top_data[index] > 0 ?
-        top_diff[index] : top_diff[index] * negative_slope;
-    bottom_data[index] = top_data[index] > 0 ?
-        top_data[index] : top_data[index] * inv_negative_slope;
+void RecursiveConvLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
+const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  if (!this->param_propagate_down_[0] && !propagate_down[0]) {
+    return;
   }
-}
+  const bool channel_last = true;
+  const bool permute_diffs = true;
+  // Permute top data & diffs from N*C*H*W to N*H*W*C and copy to mid_
+  permute_blobs_gpu(top, channel_last, permute_diffs);
+  bottom[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
+  caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+  // TOP Data & Diff are now in BOTTOM, permuted in order (N*H*W) x C
+  for (int iter = Nrec_ - 1; iter >= 0; --iter) {
+    backward_BN_gpu(bottom, bottom, iter);
+    backward_activation_func_gpu(bottom, bottom);
+    // Invert data (bottom[0])*inv(W)->data(mid_),
+    // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* const weights = this->blobs_[wt_offset]->gpu_data();
+    Dtype* const weights_diff = this->blobs_[wt_offset]->mutable_gpu_diff();
+    // First get BOTTOM data using the inverse of weights
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
+        (Dtype)1., bottom[0]->gpu_data(), weights, (Dtype)0.,
+        mid_.mutable_gpu_data());
+    // Note: BOTTOM Data is now in mid_, TOP Data & Diff still in bottom[0]
+    // Compute diff with respect to weights if needed
+    if (this->param_propagate_down_[0]) {
+      // Standard SGD diff for W: pdv{loss}{W} = G
+      caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_,
+          (Dtype)1., mid_.gpu_data(), bottom[0]->gpu_diff(), (Dtype)1.,
+          weights_diff);
+    }
+    // Compute diff with respect to bottom activation.
+    // We must always do this, even if propagate_down[0] is false.
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
+        (Dtype)1., bottom[0]->gpu_diff(), weights, (Dtype)0.,
+        mid_.mutable_gpu_diff());
+    // Note: BOTTOM Diff is now in mid_, TOP Data & Diff are still in bottom[0]
+    // Transfer Data & Diff from mid_ to bottom[0]
+    caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
+    caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+  }
+  // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
+  permute_blobs_gpu(bottom, !channel_last, permute_diffs);
+  bottom[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
+  caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
 
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::backward_ReLU_gpu(
-    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) {
-  const Dtype* top_data = top[0]->gpu_data();
-  Dtype* bottom_data = bottom[0]->mutable_gpu_data();
-  const Dtype* top_diff = top[0]->gpu_diff();
-  Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
-  // NOLINT_NEXT_LINE(whitespace/operators)
-  ReLUBackward<Dtype><<<CAFFE_GET_BLOCKS(count_), CAFFE_CUDA_NUM_THREADS>>>(
-    count_, negative_slope_, inv_negative_slope_, top_data, top_diff,
-    bottom_data, bottom_diff);
-  CUDA_POST_KERNEL_CHECK;
+  // The next forward pass will project the solver's regularized weight diffs
+  // on to the Tangent Space in the Stiefel manifold of the weights, and
+  // recompute the new weights using Cayley's transform. This will ensure that
+  // the weights always remain orthogonal in a natural way while simultaneously
+  // optimizing the problem at hand.
+  requires_orth_weight_update_ = true;
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(RecursiveConvLayer);
