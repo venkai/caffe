@@ -219,15 +219,16 @@ const vector<Blob<Dtype>*>& top) {
       break;
     }
   }
-  const int num_axes = bottom[0]->num_axes();
-  const vector<int> permute_order_shape(1, num_axes);
+  const vector<int> permute_order_shape(1, num_axes_);
   permute_order_.Reshape(permute_order_shape);
   inv_permute_order_.Reshape(permute_order_shape);
   old_steps_.Reshape(permute_order_shape);
   new_steps_.Reshape(permute_order_shape);
-  const vector<int> order_C_last{0, 2, 3, 1};  // (N,C,H,W) -> (N,H,W,C)
-  const vector<int> inv_order_C_last{0, 3, 1, 2};  // (N,H,W,C) -> (N,C,H,W)
-  for (int i = 0; i < num_axes; ++i) {
+  // (N,C,H,W) -> (N,H,W,C)
+  constexpr std::array<int, num_axes_> order_C_last = {0, 2, 3, 1};
+  // (N,H,W,C) -> (N,C,H,W)
+  constexpr std::array<int, num_axes_> inv_order_C_last = {0, 3, 1, 2};
+  for (int i = 0; i < num_axes_; ++i) {
     permute_order_.mutable_cpu_data()[i] = order_C_last[i];
     inv_permute_order_.mutable_cpu_data()[i] = inv_order_C_last[i];
     old_steps_.mutable_cpu_data()[i] = 1;
@@ -265,14 +266,13 @@ const vector<Blob<Dtype>*>& top) {
   // Compute new shape and resize mid_ blob to it.
   old_mid_shape_.clear();
   new_mid_shape_.clear();
-  const int num_axes = bottom[0]->num_axes();
-  for (int i = 0; i < num_axes; ++i) {
+  for (int i = 0; i < num_axes_; ++i) {
     new_mid_shape_.push_back(
         bottom[0]->shape(permute_order_.mutable_cpu_data()[i]));
     old_mid_shape_.push_back(bottom[0]->shape(i));
   }
   mid_.Reshape(new_mid_shape_);
-  for (int i = 0; i < num_axes - 1; ++i) {
+  for (int i = 0; i < num_axes_ - 1; ++i) {
     old_steps_.mutable_cpu_data()[i] = bottom[0]->count(i + 1);
     new_steps_.mutable_cpu_data()[i] = mid_.count(i + 1);
   }
@@ -306,36 +306,38 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_cpu() {
       << " Weights may no longer be orthogonal.";
 }
 
-/* Modified from the PermutationLayer implementation in 
+/* Modified from the PermutationLayer implementation in
   https://github.com/BVLC/caffe/commit/b68695db42aa79e874296071927536363fe1efbf
   by Wei Liu : https://github.com/weiliu89 */
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::permute_blobs_cpu(
     const vector<Blob<Dtype>*>& bottom, const bool channel_last,
     const bool permute_diffs) {
-  const int num_axes = bottom[0]->num_axes();
+  // Called by both Forward_cpu and Backward_cpu.
+  // Permute input blob (data or diff) from N*C*H*W to N*H*W*C or vice-versa.
+  // The permuted blob is stored in the buffer mid_.
   vector<int> new_orders, new_steps, old_steps;
   if (channel_last) {
     mid_.Reshape(new_mid_shape_);
-    for (int i = 0; i < num_axes; ++i) {
+    for (int i = 0; i < num_axes_; ++i) {
       new_orders.push_back(permute_order_.cpu_data()[i]);
       new_steps.push_back(new_steps_.cpu_data()[i]);
       old_steps.push_back(old_steps_.cpu_data()[i]);
     }
   } else {
     mid_.Reshape(old_mid_shape_);
-    for (int i = 0; i < num_axes; ++i) {
+    for (int i = 0; i < num_axes_; ++i) {
       new_orders.push_back(inv_permute_order_.cpu_data()[i]);
       new_steps.push_back(old_steps_.cpu_data()[i]);
       old_steps.push_back(new_steps_.cpu_data()[i]);
     }
   }
   // Start permuting bottom blob data
-  const Dtype* bottom_data = bottom[0]->cpu_data();
-  Dtype* top_data = mid_.mutable_cpu_data();
+  const Dtype* const bottom_data = bottom[0]->cpu_data();
+  Dtype* const top_data = mid_.mutable_cpu_data();
   for (int i = 0; i < count_; ++i) {
     int old_idx = 0, idx = i;
-    for (int j = 0; j < num_axes; ++j) {
+    for (int j = 0; j < num_axes_; ++j) {
       old_idx += (idx / new_steps[j]) * old_steps[new_orders[j]];
       idx %= new_steps[j];
     }
@@ -343,11 +345,11 @@ void RecursiveConvLayer<Dtype>::permute_blobs_cpu(
   }
   if (!permute_diffs) { return; }
   // Start permuting bottom blob diffs
-  const Dtype* bottom_diff = bottom[0]->cpu_diff();
-  Dtype* top_diff = mid_.mutable_cpu_diff();
+  const Dtype* const bottom_diff = bottom[0]->cpu_diff();
+  Dtype* const top_diff = mid_.mutable_cpu_diff();
   for (int i = 0; i < count_; ++i) {
     int old_idx = 0, idx = i;
-    for (int j = 0; j < num_axes; ++j) {
+    for (int j = 0; j < num_axes_; ++j) {
       old_idx += (idx / new_steps[j]) * old_steps[new_orders[j]];
       idx %= new_steps[j];
     }
@@ -355,50 +357,15 @@ void RecursiveConvLayer<Dtype>::permute_blobs_cpu(
   }
 }
 
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
-const vector<Blob<Dtype>*>& top) {
-  if (requires_orth_weight_update_) {
-    orth_weight_update_cpu();
-  }
-  const bool channel_last = true;
-  const bool permute_diffs = true;
-  if (!use_global_stats_) {
-    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] *=
-        moving_average_fraction_;
-    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] += 1;
-  }
-  // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
-  permute_blobs_cpu(bottom, channel_last, !permute_diffs);
-  top[0]->ReshapeLike(mid_);
-  for (int iter = 0; iter < Nrec_; ++iter) {
-    // Standard 1x1 convolution
-    const int wt_offset = rand_wt_order_[iter];
-    const Dtype* weights = this->blobs_[wt_offset]->cpu_data();
-    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
-        (Dtype)1., mid_.cpu_data(), weights, (Dtype)0.,
-        top[0]->mutable_cpu_data());
-    // Compute activation function in-place
-    forward_activation_func_cpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
-    // Apply BN in-place
-    forward_BN_cpu(top, top, iter);
-    if (iter == Nrec_ - 1) {
-      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
-      permute_blobs_cpu(top, !channel_last, !permute_diffs);
-      top[0]->ReshapeLike(mid_);
-      caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
-    } else {
-      // mid_ <- top; //a_i <- a_{i+1};
-      caffe_copy(count_, top[0]->cpu_data(), mid_.mutable_cpu_data());
-    }
-  }
-}
+// ----------------------------------------------------------------------------
+// ---------------------- Helpers for FORWARD PASS ----------------------------
+// ----------------------------------------------------------------------------
 
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::forward_ReLU_cpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  const Dtype* bottom_data = bottom[0]->cpu_data();
-  Dtype* top_data = top[0]->mutable_cpu_data();
+    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) const {
+  const Dtype* const bottom_data = bottom[0]->cpu_data();
+  Dtype* const top_data = top[0]->mutable_cpu_data();
   for (int i = 0; i < count_; ++i) {
     top_data[i] = std::max(bottom_data[i], Dtype(0)) +
         negative_slope_ * std::min(bottom_data[i], Dtype(0));
@@ -410,8 +377,8 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top,
     const int iter) {
   const int offset = iter * C_;
-  const Dtype* bottom_data = bottom[0]->cpu_data();
-  Dtype* top_data = top[0]->mutable_cpu_data();
+  const Dtype* const bottom_data = bottom[0]->cpu_data();
+  Dtype* const top_data = top[0]->mutable_cpu_data();
   if (bottom[0] != top[0]) {
     caffe_copy(count_, bottom_data, top_data);
   }
@@ -452,60 +419,61 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
 }
 
 template <typename Dtype>
-void RecursiveConvLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
-const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-  if (!this->param_propagate_down_[0] && !propagate_down[0]) {
-    return;
+void RecursiveConvLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
+const vector<Blob<Dtype>*>& top) {
+  if (requires_orth_weight_update_) {
+    orth_weight_update_cpu();
   }
   const bool channel_last = true;
   const bool permute_diffs = true;
-  // Permute top data & diffs from N*C*H*W to N*H*W*C and copy to mid_
-  permute_blobs_cpu(top, channel_last, permute_diffs);
-  bottom[0]->ReshapeLike(mid_);
-  caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
-  caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
-  // TOP Data & Diff are now in BOTTOM, permuted in order N*H*W*C
-  for (int iter = Nrec_ - 1; iter >= 0; --iter) {
-    backward_BN_cpu(bottom, bottom, iter);
-    backward_activation_func_cpu(bottom, bottom);
-    // Invert data (bottom[0])*inv(W)->data(mid_),
-    // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
-    const int wt_offset = rand_wt_order_[iter];
-    const Dtype* weights = this->blobs_[wt_offset]->cpu_data();
-    Dtype* weights_diff = this->blobs_[wt_offset]->mutable_cpu_diff();
-    // First get BOTTOM data using the inverse of weights
-    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
-        (Dtype)1., bottom[0]->cpu_data(), weights, (Dtype)0.,
-        mid_.mutable_cpu_data());
-    // Note: BOTTOM Data is now in mid_, TOP Data & Diff still in bottom[0]
-    // Compute diff with respect to weights if needed
-    if (this->param_propagate_down_[0]) {
-      caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_,
-          (Dtype)1., mid_.cpu_data(), bottom[0]->cpu_diff(), (Dtype)1.,
-          weights_diff);
-    }
-    // Compute diff with respect to bottom activation.
-    // We must always do this, even if propagate_down[0] is false.
-    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
-        (Dtype)1., bottom[0]->cpu_diff(), weights, (Dtype)0.,
-        mid_.mutable_cpu_diff());
-    // Note: BOTTOM Diff is now in mid_, TOP Data & Diff are still in bottom[0]
-    // Transfer Data & Diff from mid_ to bottom[0]
-    caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
-    caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  if (!use_global_stats_) {
+    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] *=
+        moving_average_fraction_;
+    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] += 1;
   }
-  // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
-  permute_blobs_cpu(bottom, !channel_last, permute_diffs);
-  bottom[0]->ReshapeLike(mid_);
-  caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
-  caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
+  permute_blobs_cpu(bottom, channel_last, !permute_diffs);
+  top[0]->ReshapeLike(mid_);
+  for (int iter = 0; iter < Nrec_; ++iter) {
+    // Standard 1x1 convolution
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* const weights = this->blobs_[wt_offset]->cpu_data();
+    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
+        (Dtype)1., mid_.cpu_data(), weights, (Dtype)0.,
+        top[0]->mutable_cpu_data());
+    // Compute activation function in-place
+    forward_activation_func_cpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
+    // Apply BN in-place
+    forward_BN_cpu(top, top, iter);
+    if (iter == Nrec_ - 1) {
+      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
+      permute_blobs_cpu(top, !channel_last, !permute_diffs);
+      top[0]->ReshapeLike(mid_);
+      caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
+    } else {
+      // mid_ <- top; //a_i <- a_{i+1};
+      caffe_copy(count_, top[0]->cpu_data(), mid_.mutable_cpu_data());
+    }
+  }
+}
 
-  // The next forward pass will project the solver's regularized weight diffs
-  // on to the Tangent Space in the Stiefel manifold of the weights, and
-  // recompute the new weights using Cayley's transform. This will ensure that
-  // the weights always remain orthogonal in a natural way while simultaneously
-  // optimizing the problem at hand.
-  requires_orth_weight_update_ = true;
+// ----------------------------------------------------------------------------
+// --------------------- Helpers for BACKWARD PASS ----------------------------
+// ----------------------------------------------------------------------------
+
+template <typename Dtype>
+void RecursiveConvLayer<Dtype>::backward_ReLU_cpu(
+    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) const {
+  const Dtype* const top_data = top[0]->cpu_data();
+  Dtype* const bottom_data = bottom[0]->mutable_cpu_data();
+  const Dtype* const top_diff = top[0]->cpu_diff();
+  Dtype* const bottom_diff = bottom[0]->mutable_cpu_diff();
+  for (int i = 0; i < count_; ++i) {
+    bottom_diff[i] = top_diff[i] * ((top_data[i] > 0) +
+        negative_slope_ * (top_data[i] <= 0));
+    bottom_data[i] = top_data[i] * ((top_data[i] > 0) +
+        inv_negative_slope_ *(top_data[i] <= 0));
+  }
 }
 
 template <typename Dtype>
@@ -513,16 +481,15 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
     const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom,
     const int iter) {
   const int offset = iter * C_;
-  Dtype* bottom_data = bottom[0]->mutable_cpu_data();
-  const Dtype* top_data = top[0]->cpu_data();
-  Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
-  const Dtype* top_diff;
-  if (bottom[0] != top[0]) {
-    top_diff = top[0]->cpu_diff();
-  } else {
+  if (bottom[0] == top[0]) {
     caffe_copy(count_, top[0]->cpu_diff(), mid_.mutable_cpu_diff());
-    top_diff = mid_.cpu_diff();
   }
+  Dtype* const bottom_data = bottom[0]->mutable_cpu_data();
+  const Dtype* const top_data = top[0]->cpu_data();
+  Dtype* const bottom_diff = bottom[0]->mutable_cpu_diff();
+  const Dtype* const top_diff =
+      bottom[0] == top[0] ? mid_.cpu_diff() : top[0]->cpu_diff();
+
   // Replicate Batch-St-dev to input size
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)1., batch_sum_multiplier_.cpu_data(),
@@ -581,31 +548,60 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
 }
 
 template <typename Dtype>
-void RecursiveConvLayer<Dtype>::backward_ReLU_cpu(
-    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) {
-  const Dtype* top_data = top[0]->cpu_data();
-  Dtype* bottom_data = bottom[0]->mutable_cpu_data();
-  const Dtype* top_diff = top[0]->cpu_diff();
-  Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
-  for (int i = 0; i < count_; ++i) {
-    bottom_diff[i] = top_diff[i] * ((top_data[i] > 0) +
-        negative_slope_ * (top_data[i] <= 0));
-    bottom_data[i] = top_data[i] * ((top_data[i] > 0) +
-        inv_negative_slope_ *(top_data[i] <= 0));
+void RecursiveConvLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
+const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
+  if (!this->param_propagate_down_[0] && !propagate_down[0]) {
+    return;
   }
-}
+  const bool channel_last = true;
+  const bool permute_diffs = true;
+  // Permute top data & diffs from N*C*H*W to N*H*W*C and copy to mid_
+  permute_blobs_cpu(top, channel_last, permute_diffs);
+  bottom[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
+  caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  // TOP Data & Diff are now in BOTTOM, permuted in order N*H*W*C
+  for (int iter = Nrec_ - 1; iter >= 0; --iter) {
+    backward_BN_cpu(bottom, bottom, iter);
+    backward_activation_func_cpu(bottom, bottom);
+    // Invert data (bottom[0])*inv(W)->data(mid_),
+    // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
+    const int wt_offset = rand_wt_order_[iter];
+    const Dtype* const weights = this->blobs_[wt_offset]->cpu_data();
+    Dtype* const weights_diff = this->blobs_[wt_offset]->mutable_cpu_diff();
+    // First get BOTTOM data using the inverse of weights
+    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
+        (Dtype)1., bottom[0]->cpu_data(), weights, (Dtype)0.,
+        mid_.mutable_cpu_data());
+    // Note: BOTTOM Data is now in mid_, TOP Data & Diff still in bottom[0]
+    // Compute diff with respect to weights if needed
+    if (this->param_propagate_down_[0]) {
+      caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, batch_size_,
+          (Dtype)1., mid_.cpu_data(), bottom[0]->cpu_diff(), (Dtype)1.,
+          weights_diff);
+    }
+    // Compute diff with respect to bottom activation.
+    // We must always do this, even if propagate_down[0] is false.
+    caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, batch_size_, C_, C_,
+        (Dtype)1., bottom[0]->cpu_diff(), weights, (Dtype)0.,
+        mid_.mutable_cpu_diff());
+    // Note: BOTTOM Diff is now in mid_, TOP Data & Diff are still in bottom[0]
+    // Transfer Data & Diff from mid_ to bottom[0]
+    caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
+    caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  }
+  // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
+  permute_blobs_cpu(bottom, !channel_last, permute_diffs);
+  bottom[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
+  caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
 
-// Wrappers for various "invertible" activation functions
-// (currently only ReLU with +ve negative_slope_).
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::forward_activation_func_cpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top) {
-  RecursiveConvLayer<Dtype>::forward_ReLU_cpu(bottom, top);
-}
-template <typename Dtype>
-void RecursiveConvLayer<Dtype>::backward_activation_func_cpu(
-    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom) {
-  RecursiveConvLayer<Dtype>::backward_ReLU_cpu(top, bottom);
+  // The next forward pass will project the solver's regularized weight diffs
+  // on to the Tangent Space in the Stiefel manifold of the weights, and
+  // recompute the new weights using Cayley's transform. This will ensure that
+  // the weights always remain orthogonal in a natural way while simultaneously
+  // optimizing the problem at hand.
+  requires_orth_weight_update_ = true;
 }
 
 #ifdef CPU_ONLY
