@@ -1,9 +1,10 @@
 #include <vector>
 #include <algorithm>
 #include <memory>
+#include <string>
+
 #include "caffe/filler.hpp"
 #include "caffe/layers/conv_rec_layer.hpp"
-
 
 namespace caffe {
 
@@ -24,6 +25,11 @@ const vector<Blob<Dtype>*>& top) {
   rand_wt_order_.clear();
   for (int i = 0; i < Nrec_; ++i) {
     rand_wt_order_.push_back(i % Nwts_);
+  }
+  if (this->phase_ == TEST) {
+    CHECK(rec_conv_param.has_orth_init())
+        << "Please specify whether weight matrices need to be orthogonalized.\n"
+        << "If weights are already orthogonal, set orth_init: false.";
   }
   // Set up Batch-Norm HyperParameters
   use_global_stats_ = this->phase_ == TEST;
@@ -55,13 +61,43 @@ const vector<Blob<Dtype>*>& top) {
   bn_param_offset_ = Nwts_;
   if (this->blobs_.size() > 0) {
     LOG(INFO) << "Skipping parameter initialization";
+    requires_orth_weight_init_ = false;
   } else {
+    requires_orth_weight_init_ = true;
+    if (!rec_conv_param.has_weight_filler()) {
+      // If no weight filler is specified, default to "uniform".
+      // Note that we will anyway orthogonalize our weights later,
+      // so all we want is for our current weights to be non-singular.
+      FillerParameter* const filler_param =
+          rec_conv_param.mutable_weight_filler();
+      filler_param->set_type("uniform");
+      filler_param->set_min(-1.0);
+      filler_param->set_max(1.0);
+    } else {
+      CHECK(rec_conv_param.weight_filler().type() == "uniform"
+          || rec_conv_param.weight_filler().type() == "gaussian")
+          << "Only uniform or gaussian fillers are supported.\n"
+          << "Note that weights need to be non-singular, "
+          << "since we will eventually orthogonalize them.";
+      if (rec_conv_param.weight_filler().type() == "uniform") {
+        CHECK_GE(rec_conv_param.weight_filler().max() -
+                 rec_conv_param.weight_filler().min(), 1e-3)
+            << "For uniform weight_filler, choose max - min >= 0.001\n"
+            << "so that weights are non-singular to working precision.";
+      } else {
+        CHECK_GE(rec_conv_param.weight_filler().std(), 1e-3)
+            << "For gaussian weight_filler, choose std >= 0.001\n"
+            << "so that weights are non-singular to working precision.";
+        CHECK_EQ(rec_conv_param.weight_filler().sparse(), -1)
+            << "Sparsity not supported, since we want non-singular weights.";
+      }
+    }
     this->blobs_.resize(bn_param_offset_ + 3);
     // Initialize and fill weights
     for (int i = 0; i < Nwts_; ++i) {
       const vector<int> weight_shape{C_, C_};
       this->blobs_[i].reset(new Blob<Dtype>(weight_shape));
-      shared_ptr<Filler<Dtype> >
+      shared_ptr<Filler<Dtype> > const
           weight_filler(GetFiller<Dtype>(rec_conv_param.weight_filler()));
       weight_filler->Fill(this->blobs_[i].get());
     }
@@ -107,21 +143,38 @@ const vector<Blob<Dtype>*>& top) {
   // activation params. Mask BN statistics from optimization by setting local
   // learning rates for mean, variance, and the bias correction to zero.
   float lr_mult_wts = 0.f, decay_mult_wts = 1.f;
-  CHECK_LE(this->layer_param_.param_size(), 1);
+  CHECK_LE(this->layer_param_.param_size(), 1)
+      <<"Atmost one param can be specified, which "
+      <<"will correspond to all convolution weights.";
   if (this->layer_param_.param_size() == 1) {
     lr_mult_wts = this->layer_param_.param(0).lr_mult();
     decay_mult_wts = this->layer_param_.param(0).decay_mult();
   } else {
-    ParamSpec* fixed_param_spec = this->layer_param_.add_param();
+    ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(0.f);
   }
+  // --- Weight Sharing Options ---
+  // If we want to share the weights of this layer with some other layer,
+  // we need a unique name for each weight. We use the "name" field in
+  // the user-specified param as the template and set the name for each
+  // weight W[i] as name_<i>.
+  const bool has_param_name = this->layer_param_.param(0).has_name();
+  const string param_name =
+      !has_param_name ? "" : (this->layer_param_.param(0).name() + "_");
+  if (has_param_name) {
+    ParamSpec* const fixed_param_spec = this->layer_param_.mutable_param(0);
+    fixed_param_spec->set_name(param_name + "0");
+  }
   for (int i = 1; i < Nwts_; ++i) {
-    ParamSpec* fixed_param_spec = this->layer_param_.add_param();
+    ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(lr_mult_wts);
     fixed_param_spec->set_decay_mult(decay_mult_wts);
+    if (has_param_name) {
+      fixed_param_spec->set_name(param_name + std::to_string(i));
+    }
   }
   for (int i = bn_param_offset_; i <= bn_param_offset_ + 2 ; ++i) {
-    ParamSpec* fixed_param_spec = this->layer_param_.add_param();
+    ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(0.f);
   }
   // Propagate gradients to CONV weights only if LR > 0.
@@ -130,6 +183,9 @@ const vector<Blob<Dtype>*>& top) {
     for (int i = 0; i < Nwts_; ++i) {
       this->set_param_propagate_down(i, true);
     }
+  }
+  if (rec_conv_param.has_orth_init()) {
+    requires_orth_weight_init_ = rec_conv_param.orth_init();
   }
   // One-time set up for buffers which do not depend on N_, H_ or W_.
   const vector<int> one_wt_shape{C_, C_};
@@ -150,16 +206,40 @@ const vector<Blob<Dtype>*>& top) {
     eye_.mutable_gpu_data();  // CPU -> GPU
     caffe_gpu_set(wt_buffer_.count(), Dtype(0), wt_buffer_.mutable_gpu_data());
     caffe_gpu_set(A_.count(), Dtype(0), A_.mutable_gpu_data());
+    caffe_gpu_rng_uniform<Dtype>(A_.count(), (Dtype)-1.0, (Dtype)1.0,
+        A_.mutable_gpu_data());
+    tau_.Reshape(vector<int>(1, C_));
+    caffe_gpu_set(C_, Dtype(1), tau_.mutable_gpu_data());
+    caffe_gpu_rng_uniform<Dtype>(C_, (Dtype)0.25, (Dtype)0.95,
+        tau_.mutable_gpu_data());
     // Query workspace size for QR factorization
-    caffe_gpu_inverse_qr<Dtype>(C_, C_, this->blobs_[0]->mutable_gpu_data(),
-        &Lwork_);
+    caffe_gpu_buffersize_qr<Dtype>(C_, C_, A_.mutable_gpu_data(),
+        tau_.mutable_gpu_data(), &Lwork_);
     LOG(INFO) << "Size of cusolverDn workspace for QR: " << Lwork_;
     workspace_.Reshape(vector<int>(1, Lwork_));
     caffe_gpu_set(Lwork_, Dtype(0), workspace_.mutable_gpu_data());
-    tau_.Reshape(vector<int>(1, C_));
-    caffe_gpu_set(tau_.count(), Dtype(0), tau_.mutable_gpu_data());
     dev_info_.Reshape(vector<int>(1, 1));
     caffe_gpu_set(dev_info_.count(), 1, dev_info_.mutable_gpu_data());
+    if (requires_orth_weight_init_) {
+      LOG(INFO) << "Orthogonalizing Weights";
+      for (int i = 0; i < Nwts_; ++i) {
+        LOG(INFO) << "Printing Weights # " << i;
+        caffe_gpu_orthogonalize<Dtype>(C_, C_,
+            this->blobs_[i]->mutable_gpu_data(), tau_.mutable_gpu_data(),
+            Lwork_, workspace_.mutable_gpu_data(),
+            dev_info_.mutable_gpu_data());
+        caffe_copy(A_.count(), this->blobs_[i]->gpu_data(),
+            A_.mutable_gpu_data());
+        caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+          this->blobs_[i]->gpu_data(), A_.gpu_data(),
+          (Dtype)0., wt_buffer_.mutable_gpu_data());
+        printf("Weights %03d\n",i);
+        test_print(&wt_buffer_);
+      }
+    } else {
+      LOG(INFO) << "Skipping Orthogonal initialization: "
+          << "Weights are assumed to be orthogonal.";
+    }
 #endif
     break;
   }

@@ -10,13 +10,15 @@
 
 namespace caffe {
 
-/* Begin caffe wrappers for cusolverDn */
+// ----------------------------------------------------------------------------
+// ------------------- Begin caffe wrappers for cusolverDn --------------------
+// ----------------------------------------------------------------------------
 
 template <>
 void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA,
     const CBLAS_TRANSPOSE TransA, const int M, const int N, const float alpha,
-    float* A, float* TAU, float* B, const int Lwork, float* Workspace,
-    int* devInfo) {
+    float* const A, float* const TAU, float* const B, const int Lwork,
+    float* const Workspace, int* const devInfo) {
   // Note: cusolverDn uses fortran-order
   const int ldb = N;
   int lda = (SideA == CblasLeft) ? M : N;
@@ -54,8 +56,8 @@ void caffe_gpu_inverse_qr<float>(const CBLAS_SIDE SideA,
 template <>
 void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA,
     const CBLAS_TRANSPOSE TransA, const int M, const int N, const double alpha,
-    double* A, double* TAU, double* B, const int Lwork, double* Workspace,
-    int* devInfo) {
+    double* const A, double* const TAU, double* const B, const int Lwork,
+    double* const Workspace, int* const devInfo) {
   // Note: cusolverDn uses fortran-order
   const int ldb = N;
   int lda = (SideA == CblasLeft) ? M : N;
@@ -91,26 +93,64 @@ void caffe_gpu_inverse_qr<double>(const CBLAS_SIDE SideA,
 }
 
 template <>
-void caffe_gpu_inverse_qr<float>(const int M, const int N, float* A,
-    int* Lwork) {
-  const int lda = M;
-  CUSOLVER_CHECK(cusolverDnSgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
-      M, N, A, lda, Lwork));
+void caffe_gpu_orthogonalize<float>(const int M, const int N,
+    float* const A, float* const TAU, const int Lwork,
+    float* const Workspace, int* const devInfo) {
+  // A is M * N (i.e. M rows, N columns) in row major with N >= M.
+  const int lda = N;
+  // First generate QR factorization of transpose(A)
+  CUSOLVER_CHECK(cusolverDnSgeqrf(Caffe::cusolver_dn_handle(), N, M, A,
+      lda, TAU, Workspace, Lwork, devInfo));
+  // Generate orthogonal Q matrix and overwrite its transpose on A.
+  CUSOLVER_CHECK(cusolverDnSorgqr(Caffe::cusolver_dn_handle(), N, M, M, A,
+      lda, TAU, Workspace, Lwork, devInfo));
 }
 
 template <>
-void caffe_gpu_inverse_qr<double>(const int M, const int N, double* A,
-    int* Lwork) {
-  const int lda = M;
-  CUSOLVER_CHECK(cusolverDnDgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
-      M, N, A, lda, Lwork));
+void caffe_gpu_orthogonalize<double>(const int M, const int N,
+    double* const A, double* const TAU, const int Lwork,
+    double* const Workspace, int* const devInfo) {
+  // A is M * N (i.e. M rows, N columns) in row major with N >= M.
+  const int lda = N;
+  // First generate QR factorization of transpose(A)
+  CUSOLVER_CHECK(cusolverDnDgeqrf(Caffe::cusolver_dn_handle(), N, M, A,
+      lda, TAU, Workspace, Lwork, devInfo));
+  // Generate orthogonal Q matrix and overwrite its transpose on A.
+  CUSOLVER_CHECK(cusolverDnDorgqr(Caffe::cusolver_dn_handle(), N, M, M, A,
+      lda, TAU, Workspace, Lwork, devInfo));
 }
 
-/* End caffe wrappers for cusolverDn */
+template <>
+void caffe_gpu_buffersize_qr<float>(const int M, const int N,
+    float* const A, float* const TAU, int* const Lwork) {
+  const int lda = M;
+  int lwork_geqrf = 0, lwork_orgqr = 0;
+  CUSOLVER_CHECK(cusolverDnSgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, A, lda, &lwork_geqrf));
+  CUSOLVER_CHECK(cusolverDnSorgqr_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, N, A, lda, TAU, &lwork_orgqr));
+  *Lwork = (lwork_geqrf > lwork_orgqr) ? lwork_geqrf : lwork_orgqr;
+}
+
+template <>
+void caffe_gpu_buffersize_qr<double>(const int M, const int N,
+    double* const A, double* const TAU, int* const Lwork) {
+  const int lda = M;
+  int lwork_geqrf = 0, lwork_orgqr = 0;
+  CUSOLVER_CHECK(cusolverDnDgeqrf_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, A, lda, &lwork_geqrf));
+  CUSOLVER_CHECK(cusolverDnDorgqr_bufferSize(Caffe::cusolver_dn_handle(),
+      M, N, N, A, lda, TAU, &lwork_orgqr));
+  *Lwork = (lwork_geqrf > lwork_orgqr) ? lwork_geqrf : lwork_orgqr;
+}
+
+// ----------------------------------------------------------------------------
+// -------------------- End caffe wrappers for cusolverDn ---------------------
+// ----------------------------------------------------------------------------
 
 template <typename Dtype>
 __global__ void absymm_kernel(const int n, const Dtype alpha, const Dtype beta,
-    const Dtype* x, Dtype* y) {
+    const Dtype* const x, Dtype* const y) {
   CUDA_KERNEL_LOOP(index, n * n) {
     y[index] = (alpha * x[index]) + (beta * x[((index % n)* n) + (index / n)]);
   }
@@ -118,7 +158,7 @@ __global__ void absymm_kernel(const int n, const Dtype alpha, const Dtype beta,
 
 template <>
 void caffe_gpu_absymm<float>(const int N, const float alpha, const float beta,
-    const float* A, float* B) {
+    const float* const A, float* const B) {
   // NOLINT_NEXT_LINE(whitespace/operators)
   absymm_kernel<float><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
       N, alpha, beta, A, B);
@@ -127,7 +167,7 @@ void caffe_gpu_absymm<float>(const int N, const float alpha, const float beta,
 
 template <>
 void caffe_gpu_absymm<double>(const int N, const double alpha,
-    const double beta, const double* A, double* B) {
+    const double beta, const double* const A, double* const B) {
   // NOLINT_NEXT_LINE(whitespace/operators)
   absymm_kernel<double><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
       N, alpha, beta, A, B);

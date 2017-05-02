@@ -147,7 +147,20 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 
 #ifndef CPU_ONLY  // GPU
 
-/* Begin caffe wrappers for cusolverDn */
+// ----------------------------------------------------------------------------
+// ------------------- Begin caffe wrappers for cusolverDn --------------------
+// ----------------------------------------------------------------------------
+// Similar to other caffe_gpu_* funcs, cusolverDn wrappers offer a simpler
+// C-style interface with inputs ordered in row-major & contiguous in memory,
+// while calling fortran-order cusolverDn gpu code under the hood.
+// For all the wrappers below, "Workspace" is an empty buffer of length "Lwork"
+// used in intermediate computations by cusolverDn. You should query "Lwork" for
+// a random non-singular matrix A of size M rows * N columns (N >= M) and
+// random non-zero vector TAU of length max(M, N) using:
+// caffe_gpu_buffersize_qr<Dtype>(M, N, A, TAU, Lwork);
+// and pre-allocate Workspace (at maybe LayerSetUp/ Reshape).
+// *devInfo is an integer (in device memory) denoting success(0) or failure(1).
+
 
 // Uses QR factorization to solve for X in either of
 // op(A)*X = alpha*B          (if SideA == CblasLeft) or
@@ -159,30 +172,42 @@ void caffe_cpu_scale(const int n, const Dtype alpha, const Dtype *x, Dtype* y);
 // represent factor matrices Q,R efficiently using householder vectors.
 // (see http://docs.nvidia.com/cuda/cusolver/index.html#cuds-lt-t-gt-geqrf)
 // B is overwritten to represent the desired solution X.
-// Workspace is an empty buffer of length Lwork used in intermediate
-// computations. You should query Lwork for given M, N using
-// caffe_gpu_inverse_qr<Dtype>(M, N, A, Lwork);
-// and pre-allocate Workspace (at maybe LayerSetUp/ Reshape).
-// *devInfo is an integer (in device memory) denoting success(0) or failure(1).
-// Similar to other caffe_gpu_* funcs, this wrapper offers a simpler c-style
-// interface with inputs ordered in row-major & contiguous in memory, while
-// calling fortran-order cusolverDn gpu code under the hood.
 // Note: A is assumed to be a well conditioned square matrix.
 template <typename Dtype>
 void caffe_gpu_inverse_qr(const CBLAS_SIDE SideA, const CBLAS_TRANSPOSE TransA,
-    const int M, const int N, const Dtype alpha, Dtype* A, Dtype* TAU,
-    Dtype* B, const int Lwork, Dtype* Workspace, int* devInfo);
+    const int M, const int N, const Dtype alpha, Dtype* const A,
+    Dtype* const TAU, Dtype* const B, const int Lwork, Dtype* const Workspace,
+    int* const devInfo);
+
+// Orthogonalization using QR factorization.
+// Input matrix A is M rows * N columns with N >= M.
+// Transpose(A) is first QR factorized with "geqrf", which represents
+// (Q, R) in (A, TAU) using householder vectors.
+// The matrix Q (also M rows * N columns) is explicitly formed from
+// (A, TAU) with "orgqr" and is overwritten on A.
+// After operation, A * transpose(A) ~= Identity.
+// If M == N, then A is orthogonal, i.e. A*transpose(A) = transpose(A)*A = I.
+template <typename Dtype>
+void caffe_gpu_orthogonalize(const int M, const int N, Dtype* const A,
+    Dtype* const TAU, const int Lwork, Dtype* const Workspace,
+    int* const devInfo);
 
 // Calculate Buffersize for QR factorization
+// This calculates the buffersize for both "geqrf" and "orgqr"
+// and chooses the max value as Lwork.
 template <typename Dtype>
-void caffe_gpu_inverse_qr(const int M, const int N, Dtype* A, int* Lwork);
+void caffe_gpu_buffersize_qr(const int M, const int N,
+    Dtype* const A, Dtype* const TAU, int* const Lwork);
 
-/* End caffe wrappers for cusolverDn */
+// ----------------------------------------------------------------------------
+// -------------------- End caffe wrappers for cusolverDn ---------------------
+// ----------------------------------------------------------------------------
 
 // General [anti]symmetrization: compute B = alpha*A + beta*transpose(A);
+// A is a N * N square matrix.
 template <typename Dtype>
 void caffe_gpu_absymm(const int N, const Dtype alpha, const Dtype beta,
-    const Dtype* A, Dtype* B);
+    const Dtype* const A, Dtype* const B);
 
 // Decaf gpu gemm provides an interface that is almost the same as the cpu
 // gemm function - following the c convention and calling the fortran-order

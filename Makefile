@@ -358,7 +358,7 @@ ifeq ($(CPU_ONLY), 1)
 	COMMON_FLAGS += -DCPU_ONLY
 else
 	# Cusolver
-	LIBRARIES += cusolver
+	LIBRARIES += cusolver gomp
 endif
 
 # Python layer support
@@ -416,8 +416,10 @@ CXXFLAGS += -MMD -MP
 COMMON_FLAGS += $(foreach includedir,$(INCLUDE_DIRS),-I$(includedir))
 CXXFLAGS += -pthread -fPIC $(COMMON_FLAGS) $(WARNINGS)
 CXXFLAGS += -std=c++11
-NVCCFLAGS += -ccbin=$(CXX) -Xcompiler -fPIC $(COMMON_FLAGS)
+NVCCFLAGS += -ccbin=$(CXX) -Xcompiler -fopenmp
+NVCCFLAGS += -Xcompiler -fPIC $(COMMON_FLAGS)
 NVCCFLAGS += -std=c++11
+NVCCFLAGS += -Wno-deprecated-gpu-targets
 # mex may invoke an older gcc that is too liberal with -Wuninitalized
 MATLAB_CXXFLAGS := $(CXXFLAGS) -Wno-uninitialized
 LINKFLAGS += -pthread -fPIC $(COMMON_FLAGS) $(WARNINGS)
