@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <vector>
+
 #include "caffe/layers/conv_rec_layer.hpp"
 
 namespace caffe {

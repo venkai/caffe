@@ -78,6 +78,7 @@ message NetParameter {
   // If set False, then whether to carry out backward is determined
   // automatically according to the net structure and learning rates.
   optional bool force_backward = 5 [default = false];
+
   // The current "state" of the network, including the phase, level, and stage.
   // Some layers may be included/excluded depending on this state and the states
   // specified in the layers' include and exclude fields.
@@ -1057,13 +1058,31 @@ message RecurrentParameter {
 
 // Message that stores parameters used by RecursiveConvLayer
 message RecursiveConvParameter {
+    // Number of recursive convolution layers.
     optional uint32 num_recursive_layers = 1 [default = 10];
+
+    // Number of unique weight matrices.
+    // num_unique_weights <= num_recursive_layers
     optional uint32 num_unique_weights = 2 [default = 10];
-    optional FillerParameter weight_filler = 3; // The filler for the weight
-    optional BatchNormParameter batch_norm_param = 4;
-    optional ReLUParameter relu_param = 5;
-    optional PReLUParameter prelu_param = 6;
-    optional ELUParameter elu_param = 7;
+
+    // The filler for the recursive convolution weights
+    // The only supported types are
+    // - "gaussian" (with std > 0.001, no sparsity) or
+    // - "uniform" (with max - min > 0.001).
+    // Note that weights will be orthogonalized after initialization,
+    // so the only requirement of the filler is that it generates
+    // non-singular weight matrices up to machine precision.
+    optional FillerParameter weight_filler = 3;
+
+    // Set this to false if you don't want to initialize weights to orthogonal
+    // weight matrices, eg: if you plan on preloading orthogonal weights.
+    // You need to explicitly set this parameter during inference.
+    optional bool orth_init = 4 [default = true];
+
+    optional BatchNormParameter batch_norm_param = 5;
+    optional ReLUParameter relu_param = 6;
+    optional PReLUParameter prelu_param = 7;
+    optional ELUParameter elu_param = 8;
 }
 
 // Message that stores parameters used by ReductionLayer

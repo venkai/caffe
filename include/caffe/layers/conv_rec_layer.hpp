@@ -121,6 +121,9 @@ class RecursiveConvLayer : public Layer<Dtype> {
   // optimizing the problem at hand.
   bool requires_orth_weight_update_;
 
+  // Whether initial weights neeed to be orthogonalized.
+  bool requires_orth_weight_init_;
+
   int N_;  // Mini-batch size
   int C_;  // # of channels
   int H_;  // Height
