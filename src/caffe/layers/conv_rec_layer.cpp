@@ -44,6 +44,7 @@ const vector<Blob<Dtype>*>& top) {
   requires_orth_weight_update_ = false;
 
   // Set up Batch-Norm HyperParameters
+  apply_pre_bn_ = rec_conv_param.apply_pre_bn();
   use_global_stats_ = this->phase_ == TEST;
   moving_average_fraction_ = 0.999;
   eps_ = 1e-5;
@@ -57,6 +58,7 @@ const vector<Blob<Dtype>*>& top) {
   }
 
   // Set up Activation Function HyperParameters (currently only ReLU)
+  apply_pre_activation_ = rec_conv_param.apply_pre_activation();
   // HyperParameters for ReLU
   negative_slope_ = 0.99;
   if (rec_conv_param.has_relu_param()) {
@@ -114,7 +116,8 @@ const vector<Blob<Dtype>*>& top) {
       weight_filler->Fill(this->blobs_[i].get());
     }
     // Initialize and fill BN mean, variance, bias correction.
-    const vector<int> bn_mean_shape{Nrec_, C_};
+    const int num_bn_layers = apply_pre_bn_ ? Nrec_ + 1 : Nrec_;
+    const vector<int> bn_mean_shape{num_bn_layers, C_};
     this->blobs_[bn_param_offset_].reset(new Blob<Dtype>(bn_mean_shape));
     this->blobs_[bn_param_offset_ + 1].reset(new Blob<Dtype>(bn_mean_shape));
     this->blobs_[bn_param_offset_ + 2].reset(
@@ -495,7 +498,7 @@ template <typename Dtype>
 void RecursiveConvLayer<Dtype>::forward_BN_cpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top,
     const int iter) {
-  const int offset = iter * C_;
+  const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
   const Dtype* const bottom_data = bottom[0]->cpu_data();
   Dtype* const top_data = top[0]->mutable_cpu_data();
   if (bottom[0] != top[0]) {
@@ -553,27 +556,32 @@ const vector<Blob<Dtype>*>& top) {
   // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
   permute_blobs_cpu(bottom, channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
+  if (apply_pre_activation_) {
+    // Add an initial activation layer
+    forward_activation_func_cpu(top, top);
+  }
+  if (apply_pre_bn_) {
+    // Add an initial batch normalization layer
+    forward_BN_cpu(top, top, -1);
+  }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution
     const int wt_offset = rand_wt_order_[iter];
     const Dtype* const weights = this->blobs_[wt_offset]->cpu_data();
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
-        (Dtype)1., mid_.cpu_data(), weights, (Dtype)0.,
-        top[0]->mutable_cpu_data());
+        (Dtype)1., top[0]->cpu_data(), weights, (Dtype)0.,
+        mid_.mutable_cpu_data());
+    caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
     // Compute activation function in-place
     forward_activation_func_cpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
     // Apply BN in-place
     forward_BN_cpu(top, top, iter);
-    if (iter == Nrec_ - 1) {
-      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
-      permute_blobs_cpu(top, !channel_last, !permute_diffs);
-      top[0]->ReshapeLike(mid_);
-      caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
-    } else {
-      // mid_ <- top; //a_i <- a_{i+1};
-      caffe_copy(count_, top[0]->cpu_data(), mid_.mutable_cpu_data());
-    }
   }
+  // Permute top from N*H*W*C to N*C*H*W and copy to mid_
+  permute_blobs_cpu(top, !channel_last, !permute_diffs);
+  top[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
 }
 
 // ----------------------------------------------------------------------------
@@ -599,7 +607,7 @@ template <typename Dtype>
 void RecursiveConvLayer<Dtype>::backward_BN_cpu(
     const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom,
     const int iter) {
-  const int offset = iter * C_;
+  const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
   if (bottom[0] == top[0]) {
     caffe_copy(count_, top[0]->cpu_diff(), mid_.mutable_cpu_diff());
   }
@@ -708,6 +716,14 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     // Transfer Data & Diff from mid_ to bottom[0]
     caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
     caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
+  }
+  if (apply_pre_bn_) {
+    // Invert the initial batch normalization layer & backpropagate diffs
+    backward_BN_cpu(bottom, bottom, -1);
+  }
+  if (apply_pre_activation_) {
+    // Invert the initial activation layer & backpropagate diffs
+    backward_activation_func_cpu(bottom, bottom);
   }
   // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
   permute_blobs_cpu(bottom, !channel_last, permute_diffs);

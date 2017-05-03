@@ -22,7 +22,6 @@ class RecursiveConvLayer : public Layer<Dtype> {
 
   virtual inline int MinBottomBlobs() const { return 1; }
   virtual inline int MinTopBlobs() const { return 1; }
-  // virtual inline bool EqualNumBottomTopBlobs() const { return true; }
   virtual inline int MaxBottomBlobs() const { return 2; }
   virtual inline int MaxTopBlobs() const { return 2; }
   virtual inline const char* type() const { return "RecursiveConv"; }
@@ -139,14 +138,17 @@ class RecursiveConvLayer : public Layer<Dtype> {
   vector<int> rand_wt_order_;  // Ordering of weights
 
   // For Batch-Norm
+  bool apply_pre_bn_;  // Add a batch-norm layer before conv.
   int bn_param_offset_;  // Beginning index of global BN param blobs
-  Blob<Dtype> temp_bn_sum_;  // cache for backward BN: 1 x C_
+  Blob<Dtype> temp_bn_sum_;  // Cache for backward BN: 1 x C_
   bool use_global_stats_;
   Dtype moving_average_fraction_;
   Dtype eps_;
   Dtype bias_correction_factor_;
   Dtype inv_batch_size_;
 
+  // for activation functions
+  bool apply_pre_activation_;  // Add an activation layer before conv.
   // For ReLU
   Dtype negative_slope_;
   Dtype inv_negative_slope_;

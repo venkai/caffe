@@ -27,7 +27,7 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
     // A = wt_buffer_ - transpose(wt_buffer_) = G'*W - W'*G
     caffe_gpu_absymm<Dtype>(C_, Dtype(1), Dtype(-1), wt_buffer_.gpu_data(),
         A_.mutable_gpu_data());
-    // G <- A * W
+    // G = A * W
     caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
         A_.gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
         this->blobs_[i]->mutable_gpu_diff());
@@ -37,6 +37,7 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
     // A <- I + A
     caffe_gpu_axpy<Dtype>(A_.count(), Dtype(1), eye_.gpu_data(),
         A_.mutable_gpu_data());
+
     // Orthogonal weight update: W <- inv(A)*W; i.e. Wnew = inv(I+A)*(I-A)*Wold
     // where A = G'*W - W'*G; and G is the original diff used by the solver.
     caffe_gpu_inverse_qr<Dtype>(CblasLeft, CblasNoTrans, C_, C_, Dtype(1.0),
@@ -139,7 +140,7 @@ template <typename Dtype>
 void RecursiveConvLayer<Dtype>::forward_BN_gpu(
     const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top,
     const int iter) {
-  const int offset = iter * C_;
+  const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
   const Dtype* const bottom_data = bottom[0]->gpu_data();
   Dtype* const top_data = top[0]->mutable_gpu_data();
   if (bottom[0] != top[0]) {
@@ -189,37 +190,40 @@ const vector<Blob<Dtype>*>& top) {
   }
   const bool channel_last = true;
   const bool permute_diffs = true;
+  if (!use_global_stats_) {
+    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] *=
+        moving_average_fraction_;
+    this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data()[0] += 1;
+  }
   // Permute bottom from N*C*H*W to N*H*W*C and copy to mid_
   permute_blobs_gpu(bottom, channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
-  if (!use_global_stats_) {
-    caffe_gpu_scal<Dtype>(this->blobs_[bn_param_offset_ + 2]->count(),
-        moving_average_fraction_,
-        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
-    caffe_gpu_add_scalar(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1),
-        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
+  caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
+  if (apply_pre_activation_) {
+    // Add an initial activation layer
+    forward_activation_func_gpu(top, top);
+  }
+  if (apply_pre_bn_) {
+    // Add an initial batch normalization layer
+    forward_BN_gpu(top, top, -1);
   }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution
     const int wt_offset = rand_wt_order_[iter];
     const Dtype* const weights = this->blobs_[wt_offset]->gpu_data();
     caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, C_,
-        (Dtype)1., mid_.gpu_data(), weights, (Dtype)0.,
-        top[0]->mutable_gpu_data());
+        (Dtype)1., top[0]->gpu_data(), weights, (Dtype)0.,
+        mid_.mutable_gpu_data());
+    caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
     // Compute activation function in-place
     forward_activation_func_gpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
     // Apply BN in-place
     forward_BN_gpu(top, top, iter);
-    if (iter == Nrec_ - 1) {
-      // Permute top from N*H*W*C to N*C*H*W and copy to mid_
-      permute_blobs_gpu(top, !channel_last, !permute_diffs);
-      top[0]->ReshapeLike(mid_);
-      caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
-    } else {
-      // mid_ <- top; //a_i <- a_{i+1};
-      caffe_copy(count_, top[0]->gpu_data(), mid_.mutable_gpu_data());
-    }
   }
+  // Permute top from N*H*W*C to N*C*H*W and copy to mid_
+  permute_blobs_gpu(top, !channel_last, !permute_diffs);
+  top[0]->ReshapeLike(mid_);
+  caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
 }
 
 // ----------------------------------------------------------------------------
@@ -257,7 +261,7 @@ template <typename Dtype>
 void RecursiveConvLayer<Dtype>::backward_BN_gpu(
     const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom,
     const int iter) {
-  const int offset = iter * C_;
+  const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
   if (bottom[0] == top[0]) {
     caffe_copy(count_, top[0]->gpu_diff(), mid_.mutable_gpu_diff());
   }
@@ -368,6 +372,14 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     // Transfer Data & Diff from mid_ to bottom[0]
     caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
     caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+  }
+  if (apply_pre_bn_) {
+    // Invert the initial batch normalization layer & backpropagate diffs
+    backward_BN_gpu(bottom, bottom, -1);
+  }
+  if (apply_pre_activation_) {
+    // Invert the initial activation layer & backpropagate diffs
+    backward_activation_func_gpu(bottom, bottom);
   }
   // Permute bottom data & diffs from N*H*W*C to N*C*H*W and copy to mid_
   permute_blobs_gpu(bottom, !channel_last, permute_diffs);
