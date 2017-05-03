@@ -1074,10 +1074,13 @@ message RecursiveConvParameter {
     // non-singular weight matrices up to machine precision.
     optional FillerParameter weight_filler = 3;
 
-    // Set this to false if you don't want to initialize weights to orthogonal
-    // weight matrices, eg: if you plan on preloading orthogonal weights.
-    // You need to explicitly set this parameter during inference.
-    optional bool orth_init = 4 [default = true];
+    // By default weights will be orthogonalized only when weight_filler is used
+    // to fill random weights. Preloaded weights during inference or training
+    // will be assumed to be orthogonal. You can override this setting by
+    // explicitly setting the parameter below to true/false.
+    // true: always perform initial orthogonalization.
+    // false: always skip initial orthogonalization.
+    optional bool orth_init = 4;
 
     optional BatchNormParameter batch_norm_param = 5;
     optional ReLUParameter relu_param = 6;

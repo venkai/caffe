@@ -11,6 +11,9 @@ namespace caffe {
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
+  C_ = bottom[0]->shape(1);  // # of channels (can't change after LayerSetUp).
+
+  // ---------------------- Set up HyperParameters ---------------------------
   RecursiveConvParameter rec_conv_param =
       this->layer_param_.recursive_conv_param();
   // Set up Convolution HyperParameters
@@ -26,11 +29,20 @@ const vector<Blob<Dtype>*>& top) {
   for (int i = 0; i < Nrec_; ++i) {
     rand_wt_order_.push_back(i % Nwts_);
   }
-  if (this->phase_ == TEST) {
-    CHECK(rec_conv_param.has_orth_init())
-        << "Please specify whether weight matrices need to be orthogonalized.\n"
-        << "If weights are already orthogonal, set orth_init: false.";
+  // Whether to perform orthogonal initialization
+  if (rec_conv_param.has_orth_init()) {
+    // First honor user specified setting
+    requires_orth_weight_init_ = rec_conv_param.orth_init();
+  } else if (this->blobs_.size() > 0) {
+    // Don't orthogonalize preloaded weights
+    requires_orth_weight_init_ = false;
+  } else {
+    // Orthogonalize randomly initialized weights
+    requires_orth_weight_init_ = true;
   }
+  // We will make this true whenever any Backward pass is executed.
+  requires_orth_weight_update_ = false;
+
   // Set up Batch-Norm HyperParameters
   use_global_stats_ = this->phase_ == TEST;
   moving_average_fraction_ = 0.999;
@@ -43,7 +55,8 @@ const vector<Blob<Dtype>*>& top) {
     }
     eps_ = bn_param.eps();
   }
-  // Set up Activation Function HyperParameters
+
+  // Set up Activation Function HyperParameters (currently only ReLU)
   // HyperParameters for ReLU
   negative_slope_ = 0.99;
   if (rec_conv_param.has_relu_param()) {
@@ -52,18 +65,16 @@ const vector<Blob<Dtype>*>& top) {
         << "Negative Slope must be strictly positive for bijectivity!";
   }
   inv_negative_slope_ = ((Dtype)1. / negative_slope_);
-  // Handle the parameter blobs: CONV + BN.
-  // - blobs_[0 ... (Nwts_ - 1)] holds the filter weights
-  // - blobs_[Nwts_] holds global BN means
-  // - blobs_[Nwts_ + 1] holds global BN variances
-  // - blobs_[Nwts_ + 2] holds BN bias correction factor
-  C_ = bottom[0]->shape(1);  // # of channels (can't change after LayerSetUp)
+
+  // ---------------- Handle the parameter blobs: CONV + BN. ------------------
+  // - blobs_[0 ... (Nwts_ - 1)] holds the filter weights.
+  // - blobs_[Nwts_] holds global BN means.
+  // - blobs_[Nwts_ + 1] holds global BN variances.
+  // - blobs_[Nwts_ + 2] holds BN bias correction factor.
   bn_param_offset_ = Nwts_;
   if (this->blobs_.size() > 0) {
     LOG(INFO) << "Skipping parameter initialization";
-    requires_orth_weight_init_ = false;
   } else {
-    requires_orth_weight_init_ = true;
     if (!rec_conv_param.has_weight_filler()) {
       // If no weight filler is specified, default to "uniform".
       // Note that we will anyway orthogonalize our weights later,
@@ -93,21 +104,22 @@ const vector<Blob<Dtype>*>& top) {
       }
     }
     this->blobs_.resize(bn_param_offset_ + 3);
-    // Initialize and fill weights
+    // Initialize and fill weights.
     for (int i = 0; i < Nwts_; ++i) {
       const vector<int> weight_shape{C_, C_};
       this->blobs_[i].reset(new Blob<Dtype>(weight_shape));
       shared_ptr<Filler<Dtype> > const
           weight_filler(GetFiller<Dtype>(rec_conv_param.weight_filler()));
+      // Note that these weights will be orthogonalized later.
       weight_filler->Fill(this->blobs_[i].get());
     }
-    // Initialize and fill BN mean, variance, bias correction
+    // Initialize and fill BN mean, variance, bias correction.
     const vector<int> bn_mean_shape{Nrec_, C_};
     this->blobs_[bn_param_offset_].reset(new Blob<Dtype>(bn_mean_shape));
     this->blobs_[bn_param_offset_ + 1].reset(new Blob<Dtype>(bn_mean_shape));
     this->blobs_[bn_param_offset_ + 2].reset(
         new Blob<Dtype>(vector<int>(1, 1)));
-    // In the case of GPU mode, directly allocate to GPU memory
+    // In the case of GPU mode, directly allocate to GPU memory.
     switch (Caffe::mode()) {
     case Caffe::CPU:
       // Zero-Mean
@@ -138,7 +150,8 @@ const vector<Blob<Dtype>*>& top) {
       break;
     }
   }
-  // Decide which params are learnable:
+
+  // -------------------- Decide which params are learnable: ------------------
   // The only learnable params are the convolution weights & possibly
   // activation params. Mask BN statistics from optimization by setting local
   // learning rates for mean, variance, and the bias correction to zero.
@@ -153,7 +166,8 @@ const vector<Blob<Dtype>*>& top) {
     ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(0.f);
   }
-  // --- Weight Sharing Options ---
+
+  // ------------------------ Weight Sharing Options --------------------------
   // If we want to share the weights of this layer with some other layer,
   // we need a unique name for each weight. We use the "name" field in
   // the user-specified param as the template and set the name for each
@@ -184,10 +198,9 @@ const vector<Blob<Dtype>*>& top) {
       this->set_param_propagate_down(i, true);
     }
   }
-  if (rec_conv_param.has_orth_init()) {
-    requires_orth_weight_init_ = rec_conv_param.orth_init();
-  }
-  // One-time set up for buffers which do not depend on N_, H_ or W_.
+
+  // ---- One-time set up for buffers which do not depend on N_, H_ or W_. ----
+  // Set up buffer blobs for orthogonal initialization/ weight updates.
   const vector<int> one_wt_shape{C_, C_};
   eye_.Reshape(one_wt_shape);
   wt_buffer_.Reshape(one_wt_shape);
@@ -212,7 +225,7 @@ const vector<Blob<Dtype>*>& top) {
     caffe_gpu_set(C_, Dtype(1), tau_.mutable_gpu_data());
     caffe_gpu_rng_uniform<Dtype>(C_, (Dtype)0.25, (Dtype)0.95,
         tau_.mutable_gpu_data());
-    // Query workspace size for QR factorization
+    // Query workspace size for QR factorization.
     caffe_gpu_buffersize_qr<Dtype>(C_, C_, A_.mutable_gpu_data(),
         tau_.mutable_gpu_data(), &Lwork_);
     LOG(INFO) << "Size of cusolverDn workspace for QR: " << Lwork_;
@@ -223,18 +236,10 @@ const vector<Blob<Dtype>*>& top) {
     if (requires_orth_weight_init_) {
       LOG(INFO) << "Orthogonalizing Weights";
       for (int i = 0; i < Nwts_; ++i) {
-        LOG(INFO) << "Printing Weights # " << i;
         caffe_gpu_orthogonalize<Dtype>(C_, C_,
             this->blobs_[i]->mutable_gpu_data(), tau_.mutable_gpu_data(),
             Lwork_, workspace_.mutable_gpu_data(),
             dev_info_.mutable_gpu_data());
-        caffe_copy(A_.count(), this->blobs_[i]->gpu_data(),
-            A_.mutable_gpu_data());
-        caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
-          this->blobs_[i]->gpu_data(), A_.gpu_data(),
-          (Dtype)0., wt_buffer_.mutable_gpu_data());
-        printf("Weights %03d\n",i);
-        test_print(&wt_buffer_);
       }
     } else {
       LOG(INFO) << "Skipping Orthogonal initialization: "
@@ -243,13 +248,15 @@ const vector<Blob<Dtype>*>& top) {
 #endif
     break;
   }
+
+  // Set up buffer blobs for batch normalization.
   bn_mu_.ReshapeLike(*(this->blobs_[bn_param_offset_]));
   bn_sigma_.ReshapeLike(*(this->blobs_[bn_param_offset_ + 1]));
   if (use_global_stats_) {
     const Dtype bn_scale_factor =
         (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
         (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
-    // Share Data to save memory
+    // Share Data to save memory.
     bn_mu_.ShareData(*(this->blobs_[bn_param_offset_]));
     bn_sigma_.ShareData(*(this->blobs_[bn_param_offset_ + 1]));
     switch (Caffe::mode()) {
@@ -261,7 +268,7 @@ const vector<Blob<Dtype>*>& top) {
       caffe_cpu_scale(bn_sigma_.count(), bn_scale_factor,
           this->blobs_[bn_param_offset_ + 1]->cpu_data(),
           bn_sigma_.mutable_cpu_data());
-      // compute standard deviation over batch = sqrt(variance + epsilon)
+      // compute standard deviation over batch = sqrt(variance + epsilon).
       caffe_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_cpu_data());
       caffe_powx(bn_sigma_.count(), bn_sigma_.cpu_data(), Dtype(0.5),
           bn_sigma_.mutable_cpu_data());
@@ -275,7 +282,7 @@ const vector<Blob<Dtype>*>& top) {
       caffe_gpu_scale(bn_sigma_.count(), bn_scale_factor,
           this->blobs_[bn_param_offset_ + 1]->gpu_data(),
           bn_sigma_.mutable_gpu_data());
-      // compute standard deviation over batch = sqrt(variance + epsilon)
+      // compute standard deviation over batch = sqrt(variance + epsilon).
       caffe_gpu_add_scalar(bn_sigma_.count(), eps_,
           bn_sigma_.mutable_gpu_data());
       caffe_gpu_powx(bn_sigma_.count(), bn_sigma_.gpu_data(), Dtype(0.5),
@@ -299,6 +306,8 @@ const vector<Blob<Dtype>*>& top) {
       break;
     }
   }
+
+  // Set up buffer blobs for permutation.
   const vector<int> permute_order_shape(1, num_axes_);
   permute_order_.Reshape(permute_order_shape);
   inv_permute_order_.Reshape(permute_order_shape);
@@ -314,9 +323,8 @@ const vector<Blob<Dtype>*>& top) {
     old_steps_.mutable_cpu_data()[i] = 1;
     new_steps_.mutable_cpu_data()[i] = 1;
   }
-  // We will make this true whenever any Backward pass is executed.
-  requires_orth_weight_update_ = false;
-  // To activate RecursiveConvLayer<Dtype>::Reshape the first time
+
+  // To activate RecursiveConvLayer<Dtype>::Reshape the first time.
   // Note that N_, H_, W_ can change but C_ can't change after LayerSetUp.
   N_ = 0; H_ = 0; W_ = 0;
 }
@@ -342,7 +350,23 @@ const vector<Blob<Dtype>*>& top) {
   inv_batch_size_ = Dtype(1.) / batch_size_;
   bias_correction_factor_ = batch_size_ > 1 ?
       Dtype(batch_size_) / (batch_size_ - 1) : 1;
+
+  // ---- Perform allocations for all large buffers. ----
+  // In the case of GPU mode, directly allocate to GPU memory.
   batch_sum_multiplier_.Reshape(vector<int>(1, batch_size_));
+  switch (Caffe::mode()) {
+  case Caffe::CPU:
+    caffe_set(batch_sum_multiplier_.count(), Dtype(1),
+        batch_sum_multiplier_.mutable_cpu_data());
+    break;
+  case Caffe::GPU:
+#ifndef CPU_ONLY
+    caffe_gpu_set(batch_sum_multiplier_.count(), Dtype(1),
+        batch_sum_multiplier_.mutable_gpu_data());
+#endif
+    break;
+  }
+
   // Compute new shape and resize mid_ blob to it.
   old_mid_shape_.clear();
   new_mid_shape_.clear();
@@ -356,27 +380,42 @@ const vector<Blob<Dtype>*>& top) {
     old_steps_.mutable_cpu_data()[i] = bottom[0]->count(i + 1);
     new_steps_.mutable_cpu_data()[i] = mid_.count(i + 1);
   }
-  // Perform allocations for large buffers.
-  // In the case of GPU mode, directly allocate to GPU memory
-  switch (Caffe::mode()) {
-  case Caffe::CPU:
-    caffe_set(batch_sum_multiplier_.count(), Dtype(1),
-        batch_sum_multiplier_.mutable_cpu_data());
-    caffe_set(count_, Dtype(0), mid_.mutable_cpu_data());
+
+  if (bottom.size() == 2) {
+    // Share Data and Diffs of buffer mid_ with bottom[1].
+    CHECK_EQ(count_, bottom[1]->count());
+    mid_.ShareData(*bottom[1]);
     if (this->phase_ != TEST) {
-      caffe_set(count_, Dtype(0), mid_.mutable_cpu_diff());
+      mid_.ShareDiff(*bottom[1]);
     }
-    break;
-  case Caffe::GPU:
+  } else {
+    // Allocate buffer blob mid_ only if it is not shared with bottom[1], since
+    // bottom[1] is already expected to be preallocated from previous layers.
+    switch (Caffe::mode()) {
+    case Caffe::CPU:
+      caffe_set(count_, Dtype(0), mid_.mutable_cpu_data());
+      if (this->phase_ != TEST) {
+        caffe_set(count_, Dtype(0), mid_.mutable_cpu_diff());
+      }
+      break;
+    case Caffe::GPU:
 #ifndef CPU_ONLY
-    caffe_gpu_set(batch_sum_multiplier_.count(), Dtype(1),
-        batch_sum_multiplier_.mutable_gpu_data());
-    caffe_gpu_set(count_, Dtype(0), mid_.mutable_gpu_data());
-    if (this->phase_ != TEST) {
-      caffe_gpu_set(count_, Dtype(0), mid_.mutable_gpu_diff());
-    }
+      caffe_gpu_set(count_, Dtype(0), mid_.mutable_gpu_data());
+      if (this->phase_ != TEST) {
+        caffe_gpu_set(count_, Dtype(0), mid_.mutable_gpu_diff());
+      }
 #endif
-    break;
+      break;
+    }
+  }
+
+  if (top.size() == 2) {
+    // Share Data and Diffs of top[1] with buffer mid_.
+    top[1]->ReshapeLike(mid_);
+    top[1]->ShareData(mid_);
+    if (this->phase_ != TEST) {
+      top[1]->ShareDiff(mid_);
+    }
   }
 }
 

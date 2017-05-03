@@ -22,7 +22,9 @@ class RecursiveConvLayer : public Layer<Dtype> {
 
   virtual inline int MinBottomBlobs() const { return 1; }
   virtual inline int MinTopBlobs() const { return 1; }
-  virtual inline bool EqualNumBottomTopBlobs() const { return true; }
+  // virtual inline bool EqualNumBottomTopBlobs() const { return true; }
+  virtual inline int MaxBottomBlobs() const { return 2; }
+  virtual inline int MaxTopBlobs() const { return 2; }
   virtual inline const char* type() const { return "RecursiveConv"; }
 
  protected:
