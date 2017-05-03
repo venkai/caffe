@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <cfloat>
 #include <vector>
 
 #include "caffe/layers/conv_rec_layer.hpp"
@@ -120,8 +121,8 @@ template <typename Dtype>
 __global__ void ReLUForward(const int nthreads, const Dtype negative_slope,
     const Dtype* const bottom_data, Dtype* const top_data) {
   CUDA_KERNEL_LOOP(index, nthreads) {
-    top_data[index] = bottom_data[index] > 0 ?
-        bottom_data[index] : bottom_data[index] * negative_slope;
+    top_data[index] = bottom_data[index] >= 0 ? bottom_data[index] :
+        (bottom_data[index] * negative_slope) - Dtype(FLT_MIN);
   }
 }
 
@@ -236,10 +237,10 @@ __global__ void ReLUBackward(const int nthreads, const Dtype negative_slope,
     const Dtype* const top_diff, Dtype* const bottom_data,
     Dtype* const bottom_diff) {
   CUDA_KERNEL_LOOP(index, nthreads) {
-    bottom_diff[index] = top_data[index] > 0 ?
+    bottom_diff[index] = top_data[index] >= 0 ?
         top_diff[index] : top_diff[index] * negative_slope;
-    bottom_data[index] = top_data[index] > 0 ?
-        top_data[index] : top_data[index] * inv_negative_slope;
+    bottom_data[index] = top_data[index] >= 0 ? top_data[index] :
+        (top_data[index] + Dtype(FLT_MIN)) * inv_negative_slope;
   }
 }
 
