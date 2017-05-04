@@ -69,14 +69,21 @@ void UnpoolingLayer<Dtype>::LayerSetUp(const vector<Blob<Dtype>*>& bottom,
     unpooled_height_ = -1;
     unpooled_width_ = -1;
   }
+  height_ = bottom[0]->height();
+  width_ = bottom[0]->width();
 }
 
 template <typename Dtype>
 void UnpoolingLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top) {
   channels_ = bottom[0]->channels();
-  height_ = bottom[0]->height();
-  width_ = bottom[0]->width();
+  // check if height/width have changed
+  if (height_ != bottom[0]->height() || width_ != bottom[0]->width()) {
+    unpooled_height_ = -1; // Recalculate below
+    unpooled_width_ = -1; // Recalculate below
+    height_ = bottom[0]->height();
+    width_ = bottom[0]->width();
+  }
 
   if (unpooled_height_ < 0 || unpooled_width_ < 0) {
     unpooled_height_ = max((height_ - 1) * stride_h_ + kernel_h_ - 2 * pad_h_,
