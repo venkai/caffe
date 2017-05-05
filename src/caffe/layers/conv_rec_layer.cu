@@ -169,6 +169,64 @@ void RecursiveConvLayer<Dtype>::test_inverse_QR_case4() {
 }
 
 template <typename Dtype>
+void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
+  for (int i = 0; i < Nwts_; ++i) {
+    // Recover previous iter weights which solver update clobbered W <- W + G
+    LOG(INFO) << "After Solver Update..";
+    printf("W = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_data());
+    printf("G = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_diff());
+    caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(1),
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->mutable_gpu_data());
+    LOG(INFO) << "Undoing Update..";
+    printf("W = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_data());
+    printf("G = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_diff());
+    // wt_buffer_ = transpose(G) * W
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->gpu_data(),
+        (Dtype)0., wt_buffer_.mutable_gpu_data());
+    LOG(INFO) << "wt_buffer_ = transpose(G) * W";
+    printf("wt_buffer = \n"); test_print(C_,C_,wt_buffer_.mutable_cpu_data());
+    // A = wt_buffer_ - transpose(wt_buffer_) = G'*W - W'*G
+    caffe_gpu_absymm<Dtype>(C_, Dtype(1), Dtype(-1), wt_buffer_.gpu_data(),
+        A_.mutable_gpu_data());
+    LOG(INFO) << "A = wt_buffer - transpose(wt_buffer) = G'*W - W'*G";
+    printf("A = \n"); test_print(C_,C_,A_.mutable_cpu_data());
+    // G <- A * W
+    caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        A_.gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
+        this->blobs_[i]->mutable_gpu_diff());
+    LOG(INFO) << "G = A * W";
+    printf("G = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_diff());
+    // W <- W - G = (I - A)*W
+    caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(-1),
+        this->blobs_[i]->gpu_diff(), this->blobs_[i]->mutable_gpu_data());
+    LOG(INFO) << "W <- W - G = (I - A)*W";
+    printf("W = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_data());
+    // A <- I + A
+    caffe_gpu_axpy<Dtype>(A_.count(), Dtype(1), eye_.gpu_data(),
+        A_.mutable_gpu_data());
+    LOG(INFO) << "A <- I + A";
+    printf("A = \n"); test_print(C_,C_,A_.mutable_cpu_data());
+    // Orthogonal weight update: W <- inv(A)*W; i.e. Wnew = inv(I+A)*(I-A)*Wold
+    // where A = G'*W - W'*G; and G is the original diff used by the solver.
+    caffe_gpu_inverse_qr(CblasLeft, CblasNoTrans, C_, C_, Dtype(1.0),
+        A_.mutable_gpu_data(), tau_.mutable_gpu_data(),
+        this->blobs_[i]->mutable_gpu_data(), Lwork_,
+        workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
+    LOG(INFO) << "After Orthogonal Weight Update..";
+    printf("W = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_data());
+    printf("G = \n"); test_print(C_,C_,this->blobs_[i]->mutable_cpu_diff());
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        this->blobs_[i]->gpu_data(), this->blobs_[i]->gpu_data(),
+        (Dtype)0., wt_buffer_.mutable_gpu_data());
+    LOG(INFO) << "Orthogonality Test: Check if transpose(W) * W == I";
+    printf("transpose(W) * W = \n");
+    test_print(C_,C_,wt_buffer_.mutable_cpu_data()); printf("\n");
+    printf("--------------------------------------------------------------\n");
+  }
+}
+
+template <typename Dtype>
 __global__ void PermuteKernel(const int nthreads, const int num_axes, const int* old_steps,
 const int* new_steps, const int* new_orders, const Dtype* bottom_data, Dtype* top_data) {
   CUDA_KERNEL_LOOP(index, nthreads) {
@@ -228,11 +286,14 @@ void RecursiveConvLayer<Dtype>::permute_blobs_gpu(const vector<Blob<Dtype>*>& bo
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
-  LOG(INFO) << "---- CASE 1 ----"; test_inverse_QR_case1();
+  /*LOG(INFO) << "---- CASE 1 ----"; test_inverse_QR_case1();
   LOG(INFO) << "---- CASE 2 ----"; test_inverse_QR_case2();
   LOG(INFO) << "---- CASE 3 ----"; test_inverse_QR_case3();
-  LOG(INFO) << "---- CASE 4 ----"; test_inverse_QR_case4();
+  LOG(INFO) << "---- CASE 4 ----"; test_inverse_QR_case4();*/
   
+  if (requires_orth_weight_update_) {
+    orth_weight_update_gpu();
+  }
   const bool channel_last = true;
   const bool permute_diffs = true;
   permute_blobs_gpu(bottom,channel_last,!permute_diffs); // Permute bottom from NxCxHxW to (N*H*W) x C and copy to mid_
@@ -303,7 +364,14 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   permute_blobs_gpu(bottom,!channel_last,permute_diffs); // Permute bottom from (N*H*W) x C to NxCxHxW and copy to mid_
   bottom[0]->ReshapeLike(mid_);
   caffe_copy(bottom[0]->count(), mid_.gpu_data(), bottom[0]->mutable_gpu_data());
-  caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff()); 
+  caffe_copy(bottom[0]->count(), mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+  
+  // The next forward pass will project the solver's regularized weight diffs
+  // on to the Tangent Space in the Stiefel manifold of the weights, and
+  // recompute the new weights using Cayley's transform. This will ensure that
+  // the weights always remain orthogonal in a natural way while simultaneously
+  // optimizing the problem at hand.
+  requires_orth_weight_update_ = true;
 }
 
 template <typename Dtype>

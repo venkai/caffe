@@ -116,11 +116,20 @@ __global__ void absymm_kernel(const int n, const Dtype alpha, const Dtype beta,
   }
 }
 
-template <typename  Dtype>
-void caffe_gpu_absymm(const int N, const Dtype alpha, const Dtype beta,
-    const Dtype* A, Dtype* B) {
+template <>
+void caffe_gpu_absymm<float>(const int N, const float alpha, const float beta,
+    const float* A, float* B) {
   // NOLINT_NEXT_LINE(whitespace/operators)
-  absymm_kernel<Dtype><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
+  absymm_kernel<float><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
+      N, alpha, beta, A, B);
+  CUDA_POST_KERNEL_CHECK;
+}
+
+template <>
+void caffe_gpu_absymm<double>(const int N, const double alpha,
+    const double beta, const double* A, double* B) {
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  absymm_kernel<double><<<CAFFE_GET_BLOCKS(N * N), CAFFE_CUDA_NUM_THREADS>>>(
       N, alpha, beta, A, B);
   CUDA_POST_KERNEL_CHECK;
 }
