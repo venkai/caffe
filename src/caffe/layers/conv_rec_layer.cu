@@ -172,7 +172,7 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(
         this->blobs_[bn_param_offset_ + 1]->mutable_gpu_data() + offset);
     // Compute Batch-St-dev = sqrt(Batch-Variance + epsilon)
     caffe_gpu_add_scalar(C_, eps_, bn_sigma_.mutable_gpu_data() + offset);
-    caffe_gpu_powx(C_, bn_sigma_.gpu_data() + offset , Dtype(0.5),
+    caffe_gpu_sqrt(C_, bn_sigma_.gpu_data() + offset,
         bn_sigma_.mutable_gpu_data() + offset);
   }
   // Replicate Batch-St-dev to input size

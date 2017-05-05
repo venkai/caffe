@@ -1,7 +1,7 @@
-#include <vector>
 #include <algorithm>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "caffe/filler.hpp"
 #include "caffe/layers/conv_rec_layer.hpp"
