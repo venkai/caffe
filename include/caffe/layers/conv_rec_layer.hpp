@@ -43,6 +43,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
       const vector<Blob<Dtype>*>& bottom) const;
   void permute_blobs_cpu(const vector<Blob<Dtype>*>& bottom,
       const bool channel_last, const bool permute_diffs);
+  void init_param_blobs_cpu();
   void forward_BN_cpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top, const int iter);
   void backward_BN_cpu(const vector<Blob<Dtype>*>& top,
@@ -56,6 +57,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
       const vector<Blob<Dtype>*>& bottom) const;
   void permute_blobs_gpu(const vector<Blob<Dtype>*>& bottom,
       const bool channel_last, const bool permute_diffs);
+  void init_param_blobs_gpu();
   void forward_BN_gpu(const vector<Blob<Dtype>*>& bottom,
       const vector<Blob<Dtype>*>& top, const int iter);
   void backward_BN_gpu(const vector<Blob<Dtype>*>& top,
@@ -131,6 +133,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   int W_;  // Width
   int count_;  // N*C*H*W
   int batch_size_;  // Effective batch size : B = N*H*W
+  bool requires_init_param_blobs_;
 
   // For Recursive Convolutions
   int Nrec_;  // # of recursive convolutions
@@ -138,6 +141,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   vector<int> rand_wt_order_;  // Ordering of weights
 
   // For Batch-Norm
+  bool reset_bn_params_; // Reset global batch-norm params.
   bool apply_pre_bn_;  // Add a batch-norm layer before conv.
   int bn_param_offset_;  // Beginning index of global BN param blobs
   Blob<Dtype> temp_bn_sum_;  // Cache for backward BN: 1 x C_

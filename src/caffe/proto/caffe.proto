@@ -1094,10 +1094,17 @@ message RecursiveConvParameter {
   // Apply an additional batch normalization layer before convolution
   optional bool apply_pre_bn = 6 [default = true];
 
-  optional BatchNormParameter batch_norm_param = 7;
-  optional ReLUParameter relu_param = 8;
-  optional PReLUParameter prelu_param = 9;
-  optional ELUParameter elu_param = 10;
+  // Resets all global batch normalization params.
+  // This may be useful in finetuning a network, where you might want to
+  // start recomputing global means/variances from scratch.
+  // If use_global_stats == true in batch_norm_param, then the params are reset
+  // to have zero mean and unit variance (i.e. no batch normalization).
+  optional bool reset_bn_params = 7 [default = false];
+
+  optional BatchNormParameter batch_norm_param = 8;
+  optional ReLUParameter relu_param = 9;
+  optional PReLUParameter prelu_param = 10;
+  optional ELUParameter elu_param = 11;
 }
 
 // Message that stores parameters used by ReductionLayer

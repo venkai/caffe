@@ -33,7 +33,7 @@ const vector<Blob<Dtype>*>& top) {
   if (rec_conv_param.has_orth_init()) {
     // First honor user specified setting
     requires_orth_weight_init_ = rec_conv_param.orth_init();
-  } else if (this->blobs_.size() > 0) {
+  } else if (this->phase_ == TEST || this->blobs_.size() > 0) {
     // Don't orthogonalize preloaded weights
     requires_orth_weight_init_ = false;
   } else {
@@ -44,6 +44,7 @@ const vector<Blob<Dtype>*>& top) {
   requires_orth_weight_update_ = false;
 
   // Set up Batch-Norm HyperParameters
+  reset_bn_params_ = rec_conv_param.reset_bn_params();
   apply_pre_bn_ = rec_conv_param.apply_pre_bn();
   use_global_stats_ = this->phase_ == TEST;
   moving_average_fraction_ = 0.999;
@@ -125,14 +126,11 @@ const vector<Blob<Dtype>*>& top) {
     // In the case of GPU mode, directly allocate to GPU memory.
     switch (Caffe::mode()) {
     case Caffe::CPU:
-      // Zero-Mean
       caffe_set(this->blobs_[bn_param_offset_]->count(), Dtype(0),
           this->blobs_[bn_param_offset_]->mutable_cpu_data());
-      // Unit-Variance
-      caffe_set(this->blobs_[bn_param_offset_ + 1]->count(), Dtype(1),
+      caffe_set(this->blobs_[bn_param_offset_ + 1]->count(), Dtype(0),
           this->blobs_[bn_param_offset_ + 1]->mutable_cpu_data());
-      // No Scaling
-      caffe_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1),
+      caffe_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
           this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data());
       break;
     case Caffe::GPU:
@@ -140,14 +138,11 @@ const vector<Blob<Dtype>*>& top) {
       for (int i = 0; i < Nwts_; ++i) {
         this->blobs_[i]->mutable_gpu_data();  // CPU -> GPU
       }
-      // Zero-Mean
       caffe_gpu_set(this->blobs_[bn_param_offset_]->count(), Dtype(0),
           this->blobs_[bn_param_offset_]->mutable_gpu_data());
-      // Unit-Variance
-      caffe_gpu_set(this->blobs_[bn_param_offset_ + 1]->count(), Dtype(1),
+      caffe_gpu_set(this->blobs_[bn_param_offset_ + 1]->count(), Dtype(0),
           this->blobs_[bn_param_offset_ + 1]->mutable_gpu_data());
-      // No Scaling
-      caffe_gpu_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(1),
+      caffe_gpu_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
           this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
 #endif
       break;
@@ -160,8 +155,8 @@ const vector<Blob<Dtype>*>& top) {
   // learning rates for mean, variance, and the bias correction to zero.
   float lr_mult_wts = 0.f, decay_mult_wts = 1.f;
   CHECK_LE(this->layer_param_.param_size(), 1)
-      <<"Atmost one param can be specified, which "
-      <<"will correspond to all convolution weights.";
+      << "Atmost one param can be specified, which "
+      << "will correspond to all convolution weights.";
   if (this->layer_param_.param_size() == 1) {
     lr_mult_wts = this->layer_param_.param(0).lr_mult();
     decay_mult_wts = this->layer_param_.param(0).decay_mult();
@@ -182,6 +177,8 @@ const vector<Blob<Dtype>*>& top) {
     ParamSpec* const fixed_param_spec = this->layer_param_.mutable_param(0);
     fixed_param_spec->set_name(param_name + "0");
   }
+
+  // Set learning params and/or param-names for all convolution weights
   for (int i = 1; i < Nwts_; ++i) {
     ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(lr_mult_wts);
@@ -190,6 +187,7 @@ const vector<Blob<Dtype>*>& top) {
       fixed_param_spec->set_name(param_name + std::to_string(i));
     }
   }
+  // Set batch normalization learning params with zero LR
   for (int i = bn_param_offset_; i <= bn_param_offset_ + 2 ; ++i) {
     ParamSpec* const fixed_param_spec = this->layer_param_.add_param();
     fixed_param_spec->set_lr_mult(0.f);
@@ -209,6 +207,7 @@ const vector<Blob<Dtype>*>& top) {
   wt_buffer_.Reshape(one_wt_shape);
   A_.Reshape(one_wt_shape);
   caffe_set(eye_.count(), Dtype(0), eye_.mutable_cpu_data());
+  // eye_ will always be a C_*C_ identity matrix.
   for (int i = 0; i < C_; ++i) {
     eye_.mutable_cpu_data()[i * (C_ + 1)] = Dtype(1);
   }
@@ -252,64 +251,6 @@ const vector<Blob<Dtype>*>& top) {
     break;
   }
 
-  // Set up buffer blobs for batch normalization.
-  bn_mu_.ReshapeLike(*(this->blobs_[bn_param_offset_]));
-  bn_sigma_.ReshapeLike(*(this->blobs_[bn_param_offset_ + 1]));
-  if (use_global_stats_) {
-    const Dtype bn_scale_factor =
-        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
-        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
-    // Share Data to save memory.
-    bn_mu_.ShareData(*(this->blobs_[bn_param_offset_]));
-    bn_sigma_.ShareData(*(this->blobs_[bn_param_offset_ + 1]));
-    switch (Caffe::mode()) {
-    case Caffe::CPU:
-      // use the stored mean/variance estimates.
-      caffe_cpu_scale(bn_mu_.count(), bn_scale_factor,
-          this->blobs_[bn_param_offset_]->cpu_data(),
-          bn_mu_.mutable_cpu_data());
-      caffe_cpu_scale(bn_sigma_.count(), bn_scale_factor,
-          this->blobs_[bn_param_offset_ + 1]->cpu_data(),
-          bn_sigma_.mutable_cpu_data());
-      // compute standard deviation over batch = sqrt(variance + epsilon).
-      caffe_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_cpu_data());
-      caffe_powx(bn_sigma_.count(), bn_sigma_.cpu_data(), Dtype(0.5),
-          bn_sigma_.mutable_cpu_data());
-      break;
-    case Caffe::GPU:
-#ifndef CPU_ONLY
-      // use the stored mean/variance estimates.
-      caffe_gpu_scale(bn_mu_.count(), bn_scale_factor,
-          this->blobs_[bn_param_offset_]->gpu_data(),
-          bn_mu_.mutable_gpu_data());
-      caffe_gpu_scale(bn_sigma_.count(), bn_scale_factor,
-          this->blobs_[bn_param_offset_ + 1]->gpu_data(),
-          bn_sigma_.mutable_gpu_data());
-      // compute standard deviation over batch = sqrt(variance + epsilon).
-      caffe_gpu_add_scalar(bn_sigma_.count(), eps_,
-          bn_sigma_.mutable_gpu_data());
-      caffe_gpu_powx(bn_sigma_.count(), bn_sigma_.gpu_data(), Dtype(0.5),
-          bn_sigma_.mutable_gpu_data());
-#endif
-      break;
-    }
-  } else {
-    temp_bn_sum_.Reshape(vector<int>(1, C_));
-    switch (Caffe::mode()) {
-    case Caffe::CPU:
-      caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
-      caffe_set(bn_sigma_.count(), Dtype(1), bn_sigma_.mutable_cpu_data());
-      caffe_set(C_, Dtype(0), temp_bn_sum_.mutable_cpu_data());
-    case Caffe::GPU:
-#ifndef CPU_ONLY
-      caffe_gpu_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_gpu_data());
-      caffe_gpu_set(bn_sigma_.count(), Dtype(1), bn_sigma_.mutable_gpu_data());
-      caffe_gpu_set(C_, Dtype(0), temp_bn_sum_.mutable_gpu_data());
-#endif
-      break;
-    }
-  }
-
   // Set up buffer blobs for permutation.
   const vector<int> permute_order_shape(1, num_axes_);
   permute_order_.Reshape(permute_order_shape);
@@ -326,6 +267,32 @@ const vector<Blob<Dtype>*>& top) {
     old_steps_.mutable_cpu_data()[i] = 1;
     new_steps_.mutable_cpu_data()[i] = 1;
   }
+
+  // Set up buffer blobs for batch normalization.
+  bn_mu_.ReshapeLike(*(this->blobs_[bn_param_offset_]));
+  bn_sigma_.ReshapeLike(*(this->blobs_[bn_param_offset_ + 1]));
+  temp_bn_sum_.Reshape(vector<int>(1, C_));
+  caffe_set(C_, Dtype(0), temp_bn_sum_.mutable_cpu_data());
+  if (use_global_stats_) {
+    // Share Data to save memory.
+    bn_mu_.ShareData(*(this->blobs_[bn_param_offset_]));
+    bn_sigma_.ShareData(*(this->blobs_[bn_param_offset_ + 1]));
+  } else {
+    switch (Caffe::mode()) {
+    case Caffe::CPU:
+      caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
+      caffe_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_cpu_data());
+      break;
+    case Caffe::GPU:
+#ifndef CPU_ONLY
+      caffe_gpu_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_gpu_data());
+      caffe_gpu_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_gpu_data());
+#endif
+      break;
+    }
+  }
+  // Used to call init_param_blobs_cpu/gpu only in the first forward pass.
+  requires_init_param_blobs_ = true;
 
   // To activate RecursiveConvLayer<Dtype>::Reshape the first time.
   // Note that N_, H_, W_ can change but C_ can't change after LayerSetUp.
@@ -422,6 +389,39 @@ const vector<Blob<Dtype>*>& top) {
   }
 }
 
+// Used to preprocess param blobs (one time) if needed.
+// Ideally this should be in LayerSetUp or Reshape, but caffe calls
+// LayerSetUp + Reshape before loading new weights during finetuning.
+template <typename Dtype>
+void RecursiveConvLayer<Dtype>::init_param_blobs_cpu() {
+  if (!requires_init_param_blobs_) {
+    return;
+  }
+  // Process param blobs for batch normalization.
+  if (reset_bn_params_) {
+    Dtype variance = use_global_stats_ ? Dtype(1) : Dtype(0);
+    caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
+    caffe_set(bn_sigma_.count(), variance, bn_sigma_.mutable_cpu_data());
+    caffe_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
+        this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data());
+  }
+  if (use_global_stats_) {
+    // Note that bn_mu_, bn_sigma_ share memory with param blobs in this case.
+    const Dtype bn_scale_factor =
+        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
+        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
+    // use the stored mean/variance estimates.
+    caffe_scal(bn_mu_.count(), bn_scale_factor, bn_mu_.mutable_cpu_data());
+    caffe_scal(bn_sigma_.count(), bn_scale_factor,
+        bn_sigma_.mutable_cpu_data());
+    // compute standard deviation over batch = sqrt(variance + epsilon).
+    caffe_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_cpu_data());
+    caffe_sqrt(bn_sigma_.count(), bn_sigma_.cpu_data(),
+        bn_sigma_.mutable_cpu_data());
+  }
+  requires_init_param_blobs_ = false;
+}
+
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::orth_weight_update_cpu() {
   LOG(INFO) << "[Warning] orth_weight_update_cpu() not yet implemented."
@@ -516,7 +516,7 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
       bn_mu_.cpu_data() + offset, (Dtype)1., top_data);
   if (!use_global_stats_) {
     // Compute Batch-Variance E((X-EX)^2)
-    caffe_powx(top[0]->count(), top_data, Dtype(2), mid_.mutable_cpu_data());
+    caffe_sqr<Dtype>(top[0]->count(), top_data, mid_.mutable_cpu_data());
     caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, inv_batch_size_,
         mid_.cpu_data(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
         bn_sigma_.mutable_cpu_data() + offset);
@@ -529,7 +529,7 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
         this->blobs_[bn_param_offset_ + 1]->mutable_cpu_data() + offset);
     // Compute Batch-St-dev = sqrt(Batch-Variance + epsilon)
     caffe_add_scalar(C_, eps_, bn_sigma_.mutable_cpu_data() + offset);
-    caffe_powx(C_, bn_sigma_.cpu_data() + offset , Dtype(0.5),
+    caffe_sqrt(C_, bn_sigma_.cpu_data() + offset,
         bn_sigma_.mutable_cpu_data() + offset);
   }
   // Replicate Batch-St-dev to input size
@@ -543,6 +543,7 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
+  init_param_blobs_cpu();
   if (requires_orth_weight_update_) {
     orth_weight_update_cpu();
   }

@@ -6,6 +6,37 @@
 
 namespace caffe {
 
+// Used to preprocess param blobs (one time) if needed.
+// Ideally this should be in LayerSetUp or Reshape, but caffe calls
+// LayerSetUp + Reshape before loading new weights during finetuning.
+template <typename Dtype>
+void RecursiveConvLayer<Dtype>::init_param_blobs_gpu() {
+  if (!requires_init_param_blobs_) { return; }
+  // Process param blobs for batch normalization.
+  if (reset_bn_params_) {
+    LOG(INFO) << "Resetting Global Batch Norm Params.";
+    Dtype variance = use_global_stats_ ? Dtype(1) : Dtype(0);
+    caffe_gpu_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_gpu_data());
+    caffe_gpu_set(bn_sigma_.count(), variance, bn_sigma_.mutable_gpu_data());
+    caffe_gpu_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
+        this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
+  }
+  if (use_global_stats_) {
+    const Dtype bn_scale_factor =
+        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
+        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
+    // use the stored mean/variance estimates.
+    caffe_gpu_scal(bn_mu_.count(), bn_scale_factor, bn_mu_.mutable_gpu_data());
+    caffe_gpu_scal(bn_sigma_.count(), bn_scale_factor,
+        bn_sigma_.mutable_gpu_data());
+    // compute standard deviation over batch = sqrt(variance + epsilon).
+    caffe_gpu_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_gpu_data());
+    caffe_gpu_sqrt(bn_sigma_.count(), bn_sigma_.gpu_data(),
+        bn_sigma_.mutable_gpu_data());
+  }
+  requires_init_param_blobs_ = false;
+}
+
 // Projects the normalized/regularized Gradient computed by previous solver
 // iteration onto the tangent space in the Stiefel Manifold of the orthogonal
 // weights from the previous iteration. Subsequently a descent curve based on
@@ -153,12 +184,13 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(
         bottom_data, batch_sum_multiplier_.gpu_data(), (Dtype)0.,
         bn_mu_.mutable_gpu_data() + offset);
   }
-  // Subtract Batch-Mean
+  // If use_global_stats_ is true, batch-mean is computed in LayerSetUp().
+  // Subtract batch-mean
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)-1., batch_sum_multiplier_.gpu_data(), bn_mu_.gpu_data() + offset,
       (Dtype)1., top_data);
   if (!use_global_stats_) {
-    // Compute Batch-Variance E((X-EX)^2)
+    // Compute batch-variance E((X-EX)^2)
     caffe_gpu_mul(count_, top_data, top_data, mid_.mutable_gpu_data());
     caffe_gpu_gemv<Dtype>(CblasTrans, batch_size_, C_, inv_batch_size_,
         mid_.gpu_data(), batch_sum_multiplier_.gpu_data(), (Dtype)0.,
@@ -170,22 +202,24 @@ void RecursiveConvLayer<Dtype>::forward_BN_gpu(
     caffe_gpu_axpby(C_, bias_correction_factor_, bn_sigma_.gpu_data() + offset,
         moving_average_fraction_,
         this->blobs_[bn_param_offset_ + 1]->mutable_gpu_data() + offset);
-    // Compute Batch-St-dev = sqrt(Batch-Variance + epsilon)
+    // Compute batch-st-dev = sqrt(batch-variance + epsilon)
     caffe_gpu_add_scalar(C_, eps_, bn_sigma_.mutable_gpu_data() + offset);
     caffe_gpu_sqrt(C_, bn_sigma_.gpu_data() + offset,
         bn_sigma_.mutable_gpu_data() + offset);
   }
-  // Replicate Batch-St-dev to input size
+  // If use_global_stats_ is true, batch-st-dev is computed in LayerSetUp().
+  // Replicate batch-st-dev to input size
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)1., batch_sum_multiplier_.gpu_data(),
       bn_sigma_.gpu_data() + offset, (Dtype)0., mid_.mutable_gpu_data());
-  // Divide by Batch-St-dev
+  // Divide by batch-st-dev
   caffe_gpu_div(count_, top_data, mid_.gpu_data(), top_data);
 }
 
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
 const vector<Blob<Dtype>*>& top) {
+  init_param_blobs_gpu();
   if (requires_orth_weight_update_) {
     orth_weight_update_gpu();
   }
