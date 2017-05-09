@@ -12,9 +12,6 @@
 
 namespace caffe {
 
-// Forward declare SoftmaxLayer for use in SoftmaxWithLossLayer.
-template <typename Dtype> class SoftmaxLayer;
-
 template <typename Dtype>
 class SoftmaxCrossEntropyLossLayer : public LossLayer<Dtype> {
  public:
