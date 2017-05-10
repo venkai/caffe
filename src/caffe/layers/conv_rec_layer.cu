@@ -379,35 +379,32 @@ void RecursiveConvLayer<Dtype>::backward_BN_gpu(
   // equation, the operations allow for expansion (i.e. broadcast) along all
   // dimensions except the channels dimension where required.
 
-  // Cache diffs.
-  caffe_copy(count_, bottom[0]->gpu_diff(), mid_.mutable_gpu_diff());
-
   // sum(dE/dY \cdot Y)
-  caffe_gpu_mul(count_, bottom[0]->gpu_data(), mid_.gpu_diff(),
-      bottom[0]->mutable_gpu_diff());
+  caffe_gpu_mul(count_, bottom[0]->gpu_data(), bottom[0]->gpu_diff(),
+      mid_.mutable_gpu_diff());
   caffe_gpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1.,
-      bottom[0]->gpu_diff(), batch_sum_multiplier_.gpu_data(), (Dtype)0.,
+      mid_.gpu_diff(), batch_sum_multiplier_.gpu_data(), (Dtype)0.,
       temp_bn_.mutable_gpu_data());
   // reshape (broadcast) the above.
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)1., batch_sum_multiplier_.gpu_data(), temp_bn_.gpu_data(),
-      (Dtype)0., bottom[0]->mutable_gpu_diff());
+      (Dtype)0., mid_.mutable_gpu_diff());
   // sum(dE/dY \cdot Y) \cdot Y
-  caffe_gpu_mul(count_, bottom[0]->gpu_data(), bottom[0]->gpu_diff(),
-      bottom[0]->mutable_gpu_diff());
+  caffe_gpu_mul(count_, bottom[0]->gpu_data(), mid_.gpu_diff(),
+      mid_.mutable_gpu_diff());
   // sum(dE/dY)
-  caffe_gpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1., mid_.gpu_diff(),
-      batch_sum_multiplier_.gpu_data(), (Dtype)0.,
+  caffe_gpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1.,
+      bottom[0]->gpu_diff(), batch_sum_multiplier_.gpu_data(), (Dtype)0.,
       temp_bn_.mutable_gpu_data());
   // reshape (broadcast) the above: sum(dE/dY) + sum(dE/dY \cdot Y) \cdot Y.
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)1., batch_sum_multiplier_.gpu_data(), temp_bn_.gpu_data(),
-      (Dtype)1., bottom[0]->mutable_gpu_diff());
+      (Dtype)1., mid_.mutable_gpu_diff());
   // dE/dY - mean(dE/dY)- (mean(dE/dY \cdot Y) \cdot Y)
-  caffe_gpu_axpby(count_, Dtype(1), mid_.gpu_diff(),
-      Dtype(-1. * inv_batch_size_), bottom[0]->mutable_gpu_diff());
+  caffe_gpu_axpby(count_, Dtype(1), bottom[0]->gpu_diff(),
+      Dtype(-1. * inv_batch_size_), mid_.mutable_gpu_diff());
   // note: mid_.gpu_data() contains sqrt(var(X)+eps).
-  caffe_gpu_div(count_, bottom[0]->gpu_diff(), mid_.gpu_data(),
+  caffe_gpu_div(count_, mid_.gpu_diff(), mid_.gpu_data(),
       bottom[0]->mutable_gpu_diff());
   // Invert BN --> Multiply by batch-st-dev.
   caffe_gpu_mul(count_, bottom[0]->gpu_data(), mid_.gpu_data(),
