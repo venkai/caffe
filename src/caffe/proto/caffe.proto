@@ -1102,9 +1102,14 @@ message RecursiveConvParameter {
   optional bool reset_bn_params = 7 [default = false];
 
   optional BatchNormParameter batch_norm_param = 8;
-  optional ReLUParameter relu_param = 9;
-  optional PReLUParameter prelu_param = 10;
-  optional ELUParameter elu_param = 11;
+
+  // Scale + Shift After Batch Norm.
+  optional bool apply_scale = 9 [default = true];  // Apply scale after each BN.
+  optional bool apply_bias = 10 [default = true];  // Apply shift after each BN.
+
+  optional ReLUParameter relu_param = 11;
+  optional PReLUParameter prelu_param = 12;
+  optional ELUParameter elu_param = 13;
 }
 
 // Message that stores parameters used by ReductionLayer
