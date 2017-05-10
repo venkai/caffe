@@ -44,10 +44,10 @@ class RecursiveConvLayer : public Layer<Dtype> {
   void permute_blobs_cpu(const vector<Blob<Dtype>*>& bottom,
       const bool channel_last, const bool permute_diffs);
   void init_param_blobs_cpu();
-  void forward_BN_cpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top, const int iter);
-  void backward_BN_cpu(const vector<Blob<Dtype>*>& top,
-      const vector<Blob<Dtype>*>& bottom, const int iter);
+  void forward_BN_cpu(const vector<Blob<Dtype>*>& top,
+      const int iter);
+  void backward_BN_cpu(const vector<Blob<Dtype>*>& bottom,
+      const int iter);
 
 #ifndef CPU_ONLY
   void orth_weight_update_gpu();
@@ -58,10 +58,10 @@ class RecursiveConvLayer : public Layer<Dtype> {
   void permute_blobs_gpu(const vector<Blob<Dtype>*>& bottom,
       const bool channel_last, const bool permute_diffs);
   void init_param_blobs_gpu();
-  void forward_BN_gpu(const vector<Blob<Dtype>*>& bottom,
-      const vector<Blob<Dtype>*>& top, const int iter);
-  void backward_BN_gpu(const vector<Blob<Dtype>*>& top,
-      const vector<Blob<Dtype>*>& bottom, const int iter);
+  void forward_BN_gpu(const vector<Blob<Dtype>*>& top,
+      const int iter);
+  void backward_BN_gpu(const vector<Blob<Dtype>*>& bottom,
+      const int iter);
 #endif
 
   // --- Large Buffer blobs ---
@@ -150,7 +150,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
 
   // For Scale/Shift after batch-norm.
   bool apply_scale_, apply_bias_;
-  
+
   // --- Temporary (for debugging) ---
   inline void test_print(const int M, const int N, const Dtype* const A) const {
     for (int i = 0; i < M; ++i) {
@@ -170,6 +170,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
       test_print(1, A->shape(0), A->cpu_data());
     }
   }
+
 };
 
 }  // namespace caffe

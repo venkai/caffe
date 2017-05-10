@@ -534,27 +534,23 @@ void RecursiveConvLayer<Dtype>::forward_ReLU_cpu(
 
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::forward_BN_cpu(
-    const vector<Blob<Dtype>*>& bottom, const vector<Blob<Dtype>*>& top,
-    const int iter) {
+    const vector<Blob<Dtype>*>& top, const int iter) {
   const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
-  const Dtype* const bottom_data = bottom[0]->cpu_data();
-  Dtype* const top_data = top[0]->mutable_cpu_data();
-  if (bottom[0] != top[0]) {
-    caffe_copy(count_, bottom_data, top_data);
-  }
+
   if (!use_global_stats_) {
     // Compute batch-mean E(X).
     caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, inv_batch_size_,
-      bottom_data, batch_sum_multiplier_.cpu_data(), (Dtype)0.,
+      top[0]->cpu_data(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
       bn_mu_.mutable_cpu_data() + offset);
   }
   // Subtract batch-mean.
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
       (Dtype)-1., batch_sum_multiplier_.cpu_data(),
-      bn_mu_.cpu_data() + offset, (Dtype)1., top_data);
+      bn_mu_.cpu_data() + offset, (Dtype)1., top[0]->mutable_cpu_data());
   if (!use_global_stats_) {
     // Compute batch-variance E((X-EX)^2).
-    caffe_sqr<Dtype>(top[0]->count(), top_data, mid_.mutable_cpu_data());
+    caffe_sqr<Dtype>(top[0]->count(), top[0]->cpu_data(),
+        mid_.mutable_cpu_data());
     caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, inv_batch_size_,
         mid_.cpu_data(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
         bn_sigma_.mutable_cpu_data() + offset);
@@ -577,7 +573,8 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
         (Dtype)1., batch_sum_multiplier_.cpu_data(),
         bn_sigma_.cpu_data() + offset, (Dtype)0., mid_.mutable_cpu_data());
     // Divide by batch-st-dev.
-    caffe_div(count_, top_data, mid_.cpu_data(), top_data);
+    caffe_div(count_, top[0]->cpu_data(), mid_.cpu_data(),
+        top[0]->mutable_cpu_data());
   } else {
     // Compute effective scale: scale/batch-st-dev.
     caffe_div(C_, this->blobs_[bn_param_offset_ + 3]->cpu_data() + offset,
@@ -587,14 +584,15 @@ void RecursiveConvLayer<Dtype>::forward_BN_cpu(
         (Dtype)1., batch_sum_multiplier_.cpu_data(), temp_bn_.cpu_data(),
         (Dtype)0., mid_.mutable_cpu_data());
     // Multiply by effective scale.
-    caffe_mul(count_, top_data, mid_.cpu_data(), top_data);
+    caffe_mul(count_, top[0]->cpu_data(), mid_.cpu_data(),
+        top[0]->mutable_cpu_data());
   }
   if (apply_bias_) {
     // Add bias term.
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
         (Dtype)1., batch_sum_multiplier_.cpu_data(),
         this->blobs_[bn_param_offset_ + 4]->cpu_data() + offset, (Dtype)1.,
-        top_data);
+        top[0]->mutable_cpu_data());
   }
 
 }
@@ -623,7 +621,7 @@ const vector<Blob<Dtype>*>& top) {
   }
   if (apply_pre_bn_) {
     // Add an initial batch normalization layer.
-    forward_BN_cpu(top, top, -1);
+    forward_BN_cpu(top, -1);
   }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution
@@ -636,7 +634,7 @@ const vector<Blob<Dtype>*>& top) {
     // Compute activation function in-place.
     forward_activation_func_cpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
     // Apply BN in-place.
-    forward_BN_cpu(top, top, iter);
+    forward_BN_cpu(top, iter);
   }
   // Permute top from N*H*W*C to N*C*H*W and copy to mid_.
   permute_blobs_cpu(top, !channel_last, !permute_diffs);
@@ -665,21 +663,19 @@ void RecursiveConvLayer<Dtype>::backward_ReLU_cpu(
 
 template <typename Dtype>
 void RecursiveConvLayer<Dtype>::backward_BN_cpu(
-    const vector<Blob<Dtype>*>& top, const vector<Blob<Dtype>*>& bottom,
-    const int iter) {
+    const vector<Blob<Dtype>*>& bottom, const int iter) {
   const int offset = apply_pre_bn_ ? (iter + 1) * C_ : iter * C_;
-  const bool in_place = bottom[0] == top[0];
 
   if (apply_bias_) {
     // Invert shift operation: (subtract bias)
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
         (Dtype)-1., batch_sum_multiplier_.cpu_data(),
         this->blobs_[bn_param_offset_ + 4]->cpu_data() + offset, (Dtype)1.,
-        top[0]->mutable_cpu_data());
+        bottom[0]->mutable_cpu_data());
     if (this->param_propagate_down_[bn_param_offset_ + 4]) {
       // Gradient with respect to shift.
       caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1.,
-          top[0]->cpu_diff(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
+          bottom[0]->cpu_diff(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
           this->blobs_[bn_param_offset_ + 4]->mutable_cpu_diff() + offset);
     }
   }
@@ -691,19 +687,19 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
         this->blobs_[bn_param_offset_ + 3]->mutable_cpu_data() + offset,
         (Dtype)0., mid_.mutable_cpu_data());
     // Invert scale operation: (divide by scale)
-    caffe_div(count_, top[0]->cpu_data(), mid_.cpu_data(),
-        top[0]->mutable_cpu_data());
+    caffe_div(count_, bottom[0]->cpu_data(), mid_.cpu_data(),
+        bottom[0]->mutable_cpu_data());
     if (this->param_propagate_down_[bn_param_offset_ + 3]) {
       // Gradient with respect to scale.
-      caffe_mul(count_, top[0]->cpu_diff(), top[0]->cpu_data(),
+      caffe_mul(count_, bottom[0]->cpu_diff(), bottom[0]->cpu_data(),
           mid_.mutable_cpu_diff());
       caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1.,
           mid_.cpu_diff(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
           this->blobs_[bn_param_offset_ + 3]->mutable_cpu_diff() + offset);
     }
     // Compute new top_diff <- scale * top_diff.
-    caffe_mul(count_, top[0]->cpu_diff(), mid_.cpu_data(),
-        top[0]->mutable_cpu_diff());
+    caffe_mul(count_, bottom[0]->cpu_diff(), mid_.cpu_data(),
+        bottom[0]->mutable_cpu_diff());
   }
 
   // Replicate batch-st-dev to input size.
@@ -712,10 +708,10 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
       bn_sigma_.cpu_data() + offset, (Dtype)0., mid_.mutable_cpu_data());
 
   if (use_global_stats_) {
-    caffe_div(count_, top[0]->cpu_diff(), mid_.cpu_data(),
+    caffe_div(count_, bottom[0]->cpu_diff(), mid_.cpu_data(),
         bottom[0]->mutable_cpu_diff());
     // Invert BN --> Multiply by batch-st-dev.
-    caffe_mul(count_, top[0]->cpu_data(), mid_.cpu_data(),
+    caffe_mul(count_, bottom[0]->cpu_data(), mid_.cpu_data(),
         bottom[0]->mutable_cpu_data());
     // Invert BN --> Add batch-mean.
     caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
@@ -736,13 +732,11 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
   // equation, the operations allow for expansion (i.e. broadcast) along all
   // dimensions except the channels dimension where required.
 
-  if (in_place) {
-    caffe_copy(count_, top[0]->cpu_diff(), mid_.mutable_cpu_diff());
-  }
-  const Dtype* const top_diff = in_place ? mid_.cpu_diff() : top[0]->cpu_diff();
+  // Cache diffs.
+  caffe_copy(count_, bottom[0]->cpu_diff(), mid_.mutable_cpu_diff());
 
   // sum(dE/dY \cdot Y)
-  caffe_mul(count_, top[0]->cpu_data(), top_diff,
+  caffe_mul(count_, bottom[0]->cpu_data(), mid_.cpu_diff(),
       bottom[0]->mutable_cpu_diff());
   caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1.,
       bottom[0]->cpu_diff(), batch_sum_multiplier_.cpu_data(), (Dtype)0.,
@@ -752,23 +746,23 @@ void RecursiveConvLayer<Dtype>::backward_BN_cpu(
       (Dtype)1., batch_sum_multiplier_.cpu_data(),
       temp_bn_.cpu_data(), (Dtype)0., bottom[0]->mutable_cpu_diff());
   // sum(dE/dY \cdot Y) \cdot Y
-  caffe_mul(count_, top[0]->cpu_data(), bottom[0]->cpu_diff(),
+  caffe_mul(count_, bottom[0]->cpu_data(), bottom[0]->cpu_diff(),
       bottom[0]->mutable_cpu_diff());
   // sum(dE/dY)
-  caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1., top_diff,
+  caffe_cpu_gemv<Dtype>(CblasTrans, batch_size_, C_, (Dtype)1., mid_.cpu_diff(),
       batch_sum_multiplier_.cpu_data(), (Dtype)0., temp_bn_.mutable_cpu_data());
   // reshape (broadcast) the above: sum(dE/dY) + sum(dE/dY \cdot Y) \cdot Y
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
   (Dtype)1., batch_sum_multiplier_.cpu_data(), temp_bn_.cpu_data(), (Dtype)1.,
   bottom[0]->mutable_cpu_diff());
   // dE/dY - mean(dE/dY)- (mean(dE/dY \cdot Y) \cdot Y)
-  caffe_cpu_axpby(count_, Dtype(1), top_diff, Dtype(-1. * inv_batch_size_),
-      bottom[0]->mutable_cpu_diff());
+  caffe_cpu_axpby(count_, Dtype(1), mid_.cpu_diff(),
+      Dtype(-1. * inv_batch_size_), bottom[0]->mutable_cpu_diff());
   // note: mid_.cpu_data() contains sqrt(var(X)+eps).
   caffe_div(count_, bottom[0]->cpu_diff(), mid_.cpu_data(),
       bottom[0]->mutable_cpu_diff());
   // Invert BN --> Multiply by batch-st-dev.
-  caffe_mul(count_, top[0]->cpu_data(), mid_.cpu_data(),
+  caffe_mul(count_, bottom[0]->cpu_data(), mid_.cpu_data(),
       bottom[0]->mutable_cpu_data());
   // Invert BN --> Add batch-mean.
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, batch_size_, C_, 1,
@@ -791,7 +785,7 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
   // TOP Data & Diff are now in BOTTOM, permuted in order N*H*W*C.
   for (int iter = Nrec_ - 1; iter >= 0; --iter) {
-    backward_BN_cpu(bottom, bottom, iter);
+    backward_BN_cpu(bottom, iter);
     backward_activation_func_cpu(bottom, bottom);
     // Invert data (bottom[0])*inv(W)->data(mid_),
     // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
@@ -821,7 +815,7 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   }
   if (apply_pre_bn_) {
     // Invert the initial batch normalization layer & backpropagate diffs.
-    backward_BN_cpu(bottom, bottom, -1);
+    backward_BN_cpu(bottom, -1);
   }
   if (apply_pre_activation_) {
     // Invert the initial activation layer & backpropagate diffs.
