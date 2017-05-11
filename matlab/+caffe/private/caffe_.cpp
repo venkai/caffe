@@ -323,7 +323,7 @@ static void net_forward(MEX_ARGS) {
   mxCHECK(nrhs == 1 && mxIsStruct(prhs[0]),
       "Usage: caffe_('net_forward', hNet)");
   Net<float>* net = handle_to_ptr<Net<float> >(prhs[0]);
-  net->ForwardPrefilled();
+  net->Forward();
 }
 
 // Usage: caffe_('net_backward', hNet)
