@@ -120,6 +120,54 @@ void caffe_gpu_orthogonalize<double>(const int M, const int N,
       lda, TAU, Workspace, Lwork, devInfo));
 }
 
+// Log of absolute values.
+template <typename Dtype>
+__global__ void log_abs_kernel(const int n, Dtype* x) {
+  CUDA_KERNEL_LOOP(index, n) {
+    x[index] = log(abs(x[index]));
+  }
+}
+
+template <>
+void caffe_gpu_logdet<float>(const int N, float* const A, float* const TAU,
+    float* const det, const int Lwork, float* Workspace, int* const devInfo) {
+  // First generate QR factorization of transpose(A) = Q*R
+  CUSOLVER_CHECK(cusolverDnSgeqrf(Caffe::cusolver_dn_handle(), N, N, A,
+      N, TAU, Workspace, Lwork, devInfo));
+  // R is overwritten to lower-triangular part of A.
+  // copy diagonal of R to TAU.
+  CUBLAS_CHECK(cublasScopy(Caffe::cublas_handle(), N, A, N + 1, TAU, 1));
+  // Take log of absolute value of elements in TAU.
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  log_abs_kernel<float><<<CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>>(
+      N, TAU);
+  // Set first N elements of Workspace to 1.
+  caffe_gpu_set<float>(N, 1.0, Workspace);
+  // det = sum of elements in TAU
+  CUBLAS_CHECK(cublasSdot(Caffe::cublas_handle(), N, TAU, 1, Workspace, 1,
+      det));
+}
+
+template <>
+void caffe_gpu_logdet<double>(const int N, double* const A, double* const TAU,
+    double* const det, const int Lwork, double* Workspace, int* const devInfo) {
+  // First generate QR factorization of transpose(A) = Q*R
+  CUSOLVER_CHECK(cusolverDnDgeqrf(Caffe::cusolver_dn_handle(), N, N, A,
+      N, TAU, Workspace, Lwork, devInfo));
+  // R is overwritten to lower-triangular part of A.
+  // copy diagonal of R to TAU.
+  CUBLAS_CHECK(cublasDcopy(Caffe::cublas_handle(), N, A, N, TAU, 1));
+  // Take log of absolute value of elements in TAU.
+  // NOLINT_NEXT_LINE(whitespace/operators)
+  log_abs_kernel<double><<<CAFFE_GET_BLOCKS(N), CAFFE_CUDA_NUM_THREADS>>>(
+      N, TAU);
+  // Set first N elements of Workspace to 1.
+  caffe_gpu_set<double>(N, 1.0, Workspace);
+  // det = sum of elements in TAU
+  CUBLAS_CHECK(cublasDdot(Caffe::cublas_handle(), N, TAU, 1, Workspace, 1,
+      det));
+}
+
 template <>
 void caffe_gpu_buffersize_qr<float>(const int M, const int N,
     float* const A, float* const TAU, int* const Lwork) {

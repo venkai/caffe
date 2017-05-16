@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cfloat>
+#include <string>
 #include <vector>
 
 #include "caffe/layers/conv_rec_layer.hpp"
@@ -59,6 +60,41 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
     // A = wt_buffer_ - transpose(wt_buffer_) = G'*W - W'*G.
     caffe_gpu_absymm<Dtype>(C_, Dtype(1), Dtype(-1), wt_buffer_.gpu_data(),
         A_.mutable_gpu_data());
+
+    Dtype lambda = 1.f;  // For scaling A <- A * lambda.
+    if (orth_norm_type_ == "Det") {
+      // log(abs(determinant)) of G
+      Dtype lg_detG = 0.f;
+      caffe_copy(wt_buffer_.count(), this->blobs_[i]->gpu_diff(),
+        wt_buffer_.mutable_gpu_data());
+      caffe_gpu_logdet<Dtype>(C_, wt_buffer_.mutable_gpu_data(),
+        tau_.mutable_gpu_data(), &lg_detG, Lwork_,
+        workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
+      // log(abs(determinant)) of A
+      Dtype lg_detA = 0.f;
+      caffe_copy(A_.count(), A_.gpu_data(), wt_buffer_.mutable_gpu_data());
+      caffe_gpu_logdet<Dtype>(C_, wt_buffer_.mutable_gpu_data(),
+          tau_.mutable_gpu_data(), &lg_detA, Lwork_,
+          workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
+      lambda = 0.5 * exp((lg_detG - lg_detA) / C_);
+      lambda = lambda >= 1e3 ? 1e3 : lambda;
+      lambda = lambda <= eps_ ? eps_ : lambda;
+      caffe_gpu_scal(A_.count(), lambda, A_.mutable_gpu_data());
+    } else if (orth_norm_type_ == "RMS") {
+      Dtype RMS_G = 1.f;
+      caffe_gpu_mul(wt_buffer_.count(), this->blobs_[i]->gpu_diff(),
+      this->blobs_[i]->gpu_diff(), wt_buffer_.mutable_gpu_data());
+      caffe_gpu_asum(wt_buffer_.count(), wt_buffer_.gpu_data(), &RMS_G);
+      Dtype RMS_A = 1.f;
+      caffe_gpu_mul(A_.count(), A_.gpu_data(), A_.gpu_data(),
+          wt_buffer_.mutable_gpu_data());
+      caffe_gpu_asum(wt_buffer_.count(), wt_buffer_.gpu_data(), &RMS_A);
+      lambda = Dtype(0.5) * sqrt(RMS_G / RMS_A);
+      lambda = lambda >= 1e3 ? 1e3 : lambda;
+      lambda = lambda <= eps_ ? eps_ : lambda;
+      caffe_gpu_scal(A_.count(), lambda, A_.mutable_gpu_data());
+    }
+
     // G = A * W.
     caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
         A_.gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
@@ -77,6 +113,7 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
         this->blobs_[i]->mutable_gpu_data(), Lwork_,
         workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
   }
+  requires_orth_weight_update_ = false;
 }
 
 template <typename Dtype>

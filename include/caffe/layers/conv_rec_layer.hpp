@@ -1,6 +1,7 @@
 #ifndef CAFFE_RECURSIVE_CONV_LAYER_HPP_
 #define CAFFE_RECURSIVE_CONV_LAYER_HPP_
 
+#include <string>
 #include <vector>
 
 #include "caffe/blob.hpp"
@@ -133,6 +134,7 @@ class RecursiveConvLayer : public Layer<Dtype> {
   int Nrec_;  // # of recursive convolutions.
   int Nwts_;  // # of unique weights (<= Nrec_).
   vector<int> rand_wt_order_;  // Ordering of weights.
+  string orth_norm_type_;  // How to normalize A in orth_weight_update_*.
 
   // For activation functions
   bool apply_pre_activation_;  // Add an activation layer before conv.

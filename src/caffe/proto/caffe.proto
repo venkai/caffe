@@ -1084,8 +1084,8 @@ message RecursiveConvParameter {
   // to fill random weights. Preloaded weights during inference or training will
   // be assumed to be orthogonal. You can override this setting by explicitly
   // setting the parameter below to true/false.
-  // true: always perform initial orthogonalization.
-  // false: always skip initial orthogonalization.
+  // true: always perform initial orthogonalization during LayerSetUp.
+  // false: always skip initial orthogonalization during LayerSetUp.
   optional bool orth_init = 4;
 
   // Apply an additional activation layer before convolution
@@ -1107,9 +1107,24 @@ message RecursiveConvParameter {
   optional bool apply_scale = 9 [default = true];  // Apply scale after each BN.
   optional bool apply_bias = 10 [default = true];  // Apply shift after each BN.
 
-  optional ReLUParameter relu_param = 11;
-  optional PReLUParameter prelu_param = 12;
-  optional ELUParameter elu_param = 13;
+  // Let G be the normalized/regularized gradient computed by the solver.
+  // (G is already scaled by the learning rate).
+  // Instead of standard weight update W <- W - G, the weights are instead
+  // updated using W <- inv(I + lamda*A) * (I - lamda*A) * W,
+  // where A = G'*W - W'*G. This corresponds to projecting G onto the tangent
+  // space of W in the Stiefel manifold: {W: W'*W = I}.
+  // In order to make this weight update synergestic with other param updates
+  // in the network, adaptively compute lambda = f(G)/f(2*A*W)
+  // at each training iteration.
+
+  // orth_norm_type == "Det"   => f = abs(determinant) = product of eigenvalues.
+  // orth_norm_type == "RMS"   => f = root mean square.
+  // orth_norm_type == "None"  => f = 1.
+  optional string orth_norm_type = 11 [default = "Det"];
+
+  optional ReLUParameter relu_param = 12;
+  optional PReLUParameter prelu_param = 13;
+  optional ELUParameter elu_param = 14;
 }
 
 // Message that stores parameters used by ReductionLayer

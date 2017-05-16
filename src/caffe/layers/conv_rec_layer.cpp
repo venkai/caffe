@@ -29,6 +29,17 @@ const vector<Blob<Dtype>*>& top) {
   for (int i = 0; i < Nrec_; ++i) {
     rand_wt_order_.push_back(i % Nwts_);
   }
+  orth_norm_type_ = rec_conv_param.orth_norm_type();
+  CHECK(orth_norm_type_ == "Det" || orth_norm_type_ == "RMS"
+      || orth_norm_type_ == "None")
+      << "Invalid value for orth_norm_type. "
+      << "Valid values are Det, RMS, None.";
+  if (orth_norm_type_ == "Det" && C_ % 2 == 1) {
+    orth_norm_type_ == "RMS";
+    LOG(INFO) << "[Warning] Switching to orth_norm_type: " << orth_norm_type_
+        << " since number of channels (" << C_ << ") is odd. Determinants of"
+        << " odd skew-symmetric matrices are always 0.";
+  }
   // Figure out whether to perform orthogonal initialization or not.
   if (rec_conv_param.has_orth_init()) {
     // First honor user specified setting.

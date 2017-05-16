@@ -192,6 +192,15 @@ void caffe_gpu_orthogonalize(const int M, const int N, Dtype* const A,
     Dtype* const TAU, const int Lwork, Dtype* const Workspace,
     int* const devInfo);
 
+// Compute Log(abs(Determinant)) of N * N matrix A
+// Transpose(A) is first QR factorized with "geqrf".
+// R matrix is overwritten to lower-triangular part of A.
+// The log of absolute values of diagonal elements in R are stored in TAU.
+// Log(abs(Determinant)) of A is in det = sum(TAU).
+template <typename Dtype>
+void caffe_gpu_logdet(const int N, Dtype* const A, Dtype* const TAU,
+    Dtype* const det, const int Lwork, Dtype* Workspace, int* const devInfo);
+
 // Calculate Buffersize for QR factorization
 // This calculates the buffersize for both "geqrf" and "orgqr"
 // and chooses the max value as Lwork.
