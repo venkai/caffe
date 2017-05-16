@@ -315,6 +315,7 @@ void Solver<Dtype>::Solve(const char* resume_file) {
 
 template <typename Dtype>
 void Solver<Dtype>::TestAll() {
+  net_->Forward();
   for (int test_net_id = 0;
        test_net_id < test_nets_.size() && !requested_early_exit_;
        ++test_net_id) {
@@ -400,6 +401,7 @@ void Solver<Dtype>::Test(const int test_net_id) {
 template <typename Dtype>
 void Solver<Dtype>::Snapshot() {
   CHECK(Caffe::root_solver());
+  net_->Forward();
   string model_filename;
   switch (param_.snapshot_format()) {
   case caffe::SolverParameter_SnapshotFormat_BINARYPROTO:
