@@ -96,6 +96,13 @@ def get_layer_label(layer, rankdir):
                       layer.convolution_param.stride[0] if len(layer.convolution_param.stride) else 1,
                       separator,
                       layer.convolution_param.pad[0] if len(layer.convolution_param.pad) else 0)
+    elif layer.type == 'RecursiveConv':
+        node_label = '"%s%s(%s)%s%d layers%s"' %\
+                     (layer.name, separator, layer.type, separator,
+                      layer.recursive_conv_param.num_recursive_layers,
+                      '' if layer.recursive_conv_param.num_recursive_layers ==
+                      layer.recursive_conv_param.num_unique_weights else
+                      (' (%d unique weights)' % (layer.recursive_conv_param.num_unique_weights)))
     elif layer.type == 'Pooling':
         pooling_types_dict = get_pooling_types_dict()
         node_label = '"%s%s(%s %s)%skernel size: %d%sstride: %d%spad: %d"' %\
@@ -166,7 +173,11 @@ def get_pydot_graph(caffe_net, rankdir, label_edges=True, phase=None):
             continue
         node_label = get_layer_label(layer, rankdir)
         node_name = "%s_%s" % (layer.name, layer.type)
-        if (len(layer.bottom) == 1 and len(layer.top) == 1 and
+        if layer.type == 'RecursiveConv':
+            layer_style = LAYER_STYLE_DEFAULT if layer.bottom[0] == layer.top[0] else NEURON_LAYER_STYLE
+            layer_style['fillcolor'] = '#f28b4f';
+            pydot_nodes[node_name] = pydot.Node(node_label, **layer_style)
+        elif (len(layer.bottom) == 1 and len(layer.top) == 1 and
            layer.bottom[0] == layer.top[0]):
             # We have an in-place neuron layer.
             pydot_nodes[node_name] = pydot.Node(node_label,
