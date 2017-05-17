@@ -22,19 +22,6 @@ void RecursiveConvLayer<Dtype>::init_param_blobs_gpu() {
     caffe_gpu_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
         this->blobs_[bn_param_offset_ + 2]->mutable_gpu_data());
   }
-  if (use_global_stats_) {
-    const Dtype bn_scale_factor =
-        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
-        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
-    // use the stored mean/variance estimates.
-    caffe_gpu_scal(bn_mu_.count(), bn_scale_factor, bn_mu_.mutable_gpu_data());
-    caffe_gpu_scal(bn_sigma_.count(), bn_scale_factor,
-        bn_sigma_.mutable_gpu_data());
-    // compute standard deviation over batch = sqrt(variance + epsilon).
-    caffe_gpu_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_gpu_data());
-    caffe_gpu_sqrt(bn_sigma_.count(), bn_sigma_.gpu_data(),
-        bn_sigma_.mutable_gpu_data());
-  }
   requires_init_param_blobs_ = false;
 }
 
@@ -277,6 +264,23 @@ const vector<Blob<Dtype>*>& top) {
   if (requires_orth_weight_update_) {
     orth_weight_update_gpu();
   }
+
+  if (use_global_stats_) {
+    const Dtype bn_scale_factor =
+        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
+        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
+    // use the stored mean/variance estimates.
+    caffe_gpu_scale(bn_mu_.count(), bn_scale_factor,
+    this->blobs_[bn_param_offset_]->gpu_data(), bn_mu_.mutable_gpu_data());
+    caffe_gpu_scale(bn_sigma_.count(), bn_scale_factor,
+        this->blobs_[bn_param_offset_ + 1]->gpu_data(),
+        bn_sigma_.mutable_gpu_data());
+    // compute standard deviation over batch = sqrt(variance + epsilon).
+    caffe_gpu_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_gpu_data());
+    caffe_gpu_sqrt(bn_sigma_.count(), bn_sigma_.gpu_data(),
+        bn_sigma_.mutable_gpu_data());
+  }
+
   const bool channel_last = true;
   const bool permute_diffs = true;
   if (!use_global_stats_) {

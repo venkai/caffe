@@ -1120,7 +1120,7 @@ message RecursiveConvParameter {
   // orth_norm_type == "Det"   => f = abs(determinant) = product of eigenvalues.
   // orth_norm_type == "RMS"   => f = root mean square.
   // orth_norm_type == "None"  => f = 1.
-  optional string orth_norm_type = 11 [default = "Det"];
+  optional string orth_norm_type = 11 [default = "None"];
 
   optional ReLUParameter relu_param = 12;
   optional PReLUParameter prelu_param = 13;

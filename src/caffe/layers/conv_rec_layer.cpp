@@ -322,24 +322,20 @@ const vector<Blob<Dtype>*>& top) {
   bn_sigma_.ReshapeLike(*(this->blobs_[bn_param_offset_ + 1]));
   temp_bn_.Reshape(vector<int>(1, C_));
   caffe_set(C_, Dtype(0), temp_bn_.mutable_cpu_data());
-  if (use_global_stats_) {
-    // Share Data to save memory.
-    bn_mu_.ShareData(*(this->blobs_[bn_param_offset_]));
-    bn_sigma_.ShareData(*(this->blobs_[bn_param_offset_ + 1]));
-  } else {
-    switch (Caffe::mode()) {
-    case Caffe::CPU:
-      caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
-      caffe_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_cpu_data());
-      break;
-    case Caffe::GPU:
+
+  switch (Caffe::mode()) {
+  case Caffe::CPU:
+    caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
+    caffe_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_cpu_data());
+    break;
+  case Caffe::GPU:
 #ifndef CPU_ONLY
-      caffe_gpu_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_gpu_data());
-      caffe_gpu_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_gpu_data());
+    caffe_gpu_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_gpu_data());
+    caffe_gpu_set(bn_sigma_.count(), Dtype(0), bn_sigma_.mutable_gpu_data());
 #endif
-      break;
-    }
+    break;
   }
+
   // Used to call init_param_blobs_cpu/gpu only in the first forward pass.
   requires_init_param_blobs_ = true;
 
@@ -448,25 +444,12 @@ void RecursiveConvLayer<Dtype>::init_param_blobs_cpu() {
   }
   // Process param blobs for batch normalization.
   if (reset_bn_params_) {
+    LOG(INFO) << "Resetting Global Batch Norm Params.";
     Dtype variance = use_global_stats_ ? Dtype(1) : Dtype(0);
     caffe_set(bn_mu_.count(), Dtype(0), bn_mu_.mutable_cpu_data());
     caffe_set(bn_sigma_.count(), variance, bn_sigma_.mutable_cpu_data());
     caffe_set(this->blobs_[bn_param_offset_ + 2]->count(), Dtype(0),
         this->blobs_[bn_param_offset_ + 2]->mutable_cpu_data());
-  }
-  if (use_global_stats_) {
-    // Note that bn_mu_, bn_sigma_ share memory with param blobs in this case.
-    const Dtype bn_scale_factor =
-        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
-        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
-    // use the stored mean/variance estimates.
-    caffe_scal(bn_mu_.count(), bn_scale_factor, bn_mu_.mutable_cpu_data());
-    caffe_scal(bn_sigma_.count(), bn_scale_factor,
-        bn_sigma_.mutable_cpu_data());
-    // compute standard deviation over batch = sqrt(variance + epsilon).
-    caffe_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_cpu_data());
-    caffe_sqrt(bn_sigma_.count(), bn_sigma_.cpu_data(),
-        bn_sigma_.mutable_cpu_data());
   }
   requires_init_param_blobs_ = false;
 }
@@ -615,6 +598,23 @@ const vector<Blob<Dtype>*>& top) {
   if (requires_orth_weight_update_) {
     orth_weight_update_cpu();
   }
+
+  if (use_global_stats_) {
+    const Dtype bn_scale_factor =
+        (this->blobs_[bn_param_offset_ + 2]->cpu_data()[0] == 0) ? Dtype(0) :
+        (Dtype(1.)/ this->blobs_[bn_param_offset_ + 2]->cpu_data()[0]);
+    // use the stored mean/variance estimates.
+    caffe_cpu_scale(bn_mu_.count(), bn_scale_factor,
+        this->blobs_[bn_param_offset_]->cpu_data(), bn_mu_.mutable_cpu_data());
+    caffe_cpu_scale(bn_sigma_.count(), bn_scale_factor,
+        this->blobs_[bn_param_offset_ + 1]->cpu_data(),
+        bn_sigma_.mutable_cpu_data());
+    // compute standard deviation over batch = sqrt(variance + epsilon).
+    caffe_add_scalar(bn_sigma_.count(), eps_, bn_sigma_.mutable_cpu_data());
+    caffe_sqrt(bn_sigma_.count(), bn_sigma_.cpu_data(),
+        bn_sigma_.mutable_cpu_data());
+  }
+
   const bool channel_last = true;
   const bool permute_diffs = true;
   if (!use_global_stats_) {
