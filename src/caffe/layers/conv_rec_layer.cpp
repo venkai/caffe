@@ -58,6 +58,7 @@ const vector<Blob<Dtype>*>& top) {
   apply_pre_activation_ = rec_conv_param.apply_pre_activation();
   // HyperParameters for ReLU
   negative_slope_ = 0.99;
+  eps_ = 1e-5;
   if (rec_conv_param.has_relu_param()) {
     negative_slope_ = rec_conv_param.relu_param().negative_slope();
     CHECK_GT(negative_slope_, eps_)
@@ -70,7 +71,7 @@ const vector<Blob<Dtype>*>& top) {
   apply_pre_bn_ = rec_conv_param.apply_pre_bn();
   use_global_stats_ = this->phase_ == TEST;
   moving_average_fraction_ = 0.999;
-  eps_ = 1e-5;
+
   if (rec_conv_param.has_batch_norm_param()) {
     BatchNormParameter bn_param = rec_conv_param.batch_norm_param();
     moving_average_fraction_ = bn_param.moving_average_fraction();
