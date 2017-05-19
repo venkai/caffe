@@ -530,7 +530,7 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   // recompute the new weights using Cayley's transform. This will ensure that
   // the weights always remain orthogonal in a natural way while simultaneously
   // optimizing the problem at hand.
-  requires_orth_weight_update_ = true;
+  requires_orth_weight_update_ = Nrec_ > 0;
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(RecursiveConvLayer);

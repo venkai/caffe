@@ -18,6 +18,7 @@ const vector<Blob<Dtype>*>& top) {
       this->layer_param_.recursive_conv_param();
   // Set up Convolution HyperParameters.
   Nrec_ = rec_conv_param.num_recursive_layers();
+  CHECK(Nrec_ >= 0) << "# of recursions must be >= 0";
   if (rec_conv_param.has_num_unique_weights()) {
     Nwts_ = rec_conv_param.num_unique_weights();
     CHECK_GE(Nrec_, Nwts_)
@@ -63,12 +64,21 @@ const vector<Blob<Dtype>*>& top) {
     negative_slope_ = rec_conv_param.relu_param().negative_slope();
     CHECK_GT(negative_slope_, eps_)
         << "Negative Slope must be strictly positive for bijectivity!";
+  } else {
+    // Adaptively compute negative slope.
+    const Dtype base_neg_slope = 0.01;
+    negative_slope_ = Nrec_ > 1 ?
+        pow(base_neg_slope, ((Dtype)1. / Nrec_)) : 0.001;
+    LOG(INFO) << "Adaptive negative slope: " << negative_slope_;
   }
   inv_negative_slope_ = ((Dtype)1. / negative_slope_);
 
   // Set up Batch-Norm HyperParameters.
   reset_bn_params_ = rec_conv_param.reset_bn_params();
   apply_pre_bn_ = rec_conv_param.apply_pre_bn();
+  CHECK(Nrec_ > 0 || (Nrec_ == 0 && (apply_pre_bn_ || apply_pre_activation_)))
+      << "If # recursions is 0, then either "
+      << "apply_pre_bn or apply_pre_activation must be true.";
   use_global_stats_ = this->phase_ == TEST;
   moving_average_fraction_ = 0.999;
 
@@ -101,7 +111,7 @@ const vector<Blob<Dtype>*>& top) {
   if (this->blobs_.size() > 0) {
     LOG(INFO) << "Skipping parameter initialization";
   } else {
-    if (!rec_conv_param.has_weight_filler()) {
+    if (!rec_conv_param.has_weight_filler() && Nrec_ > 0) {
       // If no weight filler is specified, default to "uniform".
       // Note that we will anyway orthogonalize our weights later,
       // so all we want is for our current weights to be non-singular.
@@ -110,7 +120,7 @@ const vector<Blob<Dtype>*>& top) {
       filler_param->set_type("uniform");
       filler_param->set_min(-1.0);
       filler_param->set_max(1.0);
-    } else {
+    } else if (Nrec_ > 0) {
       CHECK(rec_conv_param.weight_filler().type() == "uniform"
           || rec_conv_param.weight_filler().type() == "gaussian")
           << "Only uniform or gaussian fillers are supported.\n"
@@ -266,11 +276,13 @@ const vector<Blob<Dtype>*>& top) {
   }
   switch (Caffe::mode()) {
   case Caffe::CPU:
+    if (Nrec_ == 0) { break; }
     caffe_set(wt_buffer_.count(), Dtype(0), wt_buffer_.mutable_cpu_data());
     caffe_set(A_.count(), Dtype(0), A_.mutable_cpu_data());
     break;
   case Caffe::GPU:
 #ifndef CPU_ONLY
+    if (Nrec_ == 0) { break; }
     eye_.mutable_gpu_data();  // CPU -> GPU
     caffe_gpu_set(wt_buffer_.count(), Dtype(0), wt_buffer_.mutable_gpu_data());
     caffe_gpu_set(A_.count(), Dtype(0), A_.mutable_gpu_data());
@@ -856,7 +868,7 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   // recompute the new weights using Cayley's transform. This will ensure that
   // the weights always remain orthogonal in a natural way while simultaneously
   // optimizing the problem at hand.
-  requires_orth_weight_update_ = true;
+  requires_orth_weight_update_ = Nrec_ > 0;
 }
 
 #ifdef CPU_ONLY
