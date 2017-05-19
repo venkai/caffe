@@ -85,6 +85,9 @@ const vector<Blob<Dtype>*>& top) {
   apply_scale_ = rec_conv_param.apply_scale();
   apply_bias_ = rec_conv_param.apply_bias();
 
+  // "BN + activation" or "activation + BN"
+  bn_after_activation_ = rec_conv_param.bn_after_activation();
+
   bn_param_offset_ = Nwts_;
   // ---------------- Handle the parameter blobs: CONV + BN. ------------------
   // - blobs_[0 ... (Nwts_ - 1)] holds the filter weights.
@@ -627,13 +630,17 @@ const vector<Blob<Dtype>*>& top) {
   permute_blobs_cpu(bottom, channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
   caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
-  if (apply_pre_activation_) {
-    // Add an initial activation layer.
+  if (bn_after_activation_ && apply_pre_activation_) {
+    // Add an initial activation layer before BN.
     forward_activation_func_cpu(top, top);
   }
   if (apply_pre_bn_) {
     // Add an initial batch normalization layer.
     forward_BN_cpu(top, -1);
+  }
+  if (!bn_after_activation_ && apply_pre_activation_) {
+    // Add an initial activation layer after BN.
+    forward_activation_func_cpu(top, top);
   }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution
@@ -643,10 +650,12 @@ const vector<Blob<Dtype>*>& top) {
         (Dtype)1., top[0]->cpu_data(), weights, (Dtype)0.,
         mid_.mutable_cpu_data());
     caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
-    // Compute activation function in-place.
-    forward_activation_func_cpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
+    // Compute activation function in-place before BN.
+    if (bn_after_activation_) { forward_activation_func_cpu(top, top); }
     // Apply BN in-place.
     forward_BN_cpu(top, iter);
+    // Compute activation function in-place after BN.
+    if (!bn_after_activation_) { forward_activation_func_cpu(top, top); }
   }
   // Permute top from N*H*W*C to N*C*H*W and copy to mid_.
   permute_blobs_cpu(top, !channel_last, !permute_diffs);
@@ -795,8 +804,9 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
   // TOP Data & Diff are now in BOTTOM, permuted in order N*H*W*C.
   for (int iter = Nrec_ - 1; iter >= 0; --iter) {
+    if (!bn_after_activation_) { backward_activation_func_cpu(bottom, bottom); }
     backward_BN_cpu(bottom, iter);
-    backward_activation_func_cpu(bottom, bottom);
+    if (bn_after_activation_) { backward_activation_func_cpu(bottom, bottom); }
     // Invert data (bottom[0])*inv(W)->data(mid_),
     // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
     const int wt_offset = rand_wt_order_[iter];
@@ -823,11 +833,15 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     caffe_copy(count_, mid_.cpu_data(), bottom[0]->mutable_cpu_data());
     caffe_copy(count_, mid_.cpu_diff(), bottom[0]->mutable_cpu_diff());
   }
+  if (!bn_after_activation_ && apply_pre_activation_) {
+    // Invert the initial activation layer & backpropagate diffs.
+    backward_activation_func_cpu(bottom, bottom);
+  }
   if (apply_pre_bn_) {
     // Invert the initial batch normalization layer & backpropagate diffs.
     backward_BN_cpu(bottom, -1);
   }
-  if (apply_pre_activation_) {
+  if (bn_after_activation_ && apply_pre_activation_) {
     // Invert the initial activation layer & backpropagate diffs.
     backward_activation_func_cpu(bottom, bottom);
   }

@@ -292,13 +292,17 @@ const vector<Blob<Dtype>*>& top) {
   permute_blobs_gpu(bottom, channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
   caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
-  if (apply_pre_activation_) {
-    // Add an initial activation layer.
+  if (bn_after_activation_ && apply_pre_activation_) {
+    // Add an initial activation layer before BN.
     forward_activation_func_gpu(top, top);
   }
   if (apply_pre_bn_) {
     // Add an initial batch normalization layer.
     forward_BN_gpu(top, -1);
+  }
+  if (!bn_after_activation_ && apply_pre_activation_) {
+    // Add an initial activation layer after BN.
+    forward_activation_func_gpu(top, top);
   }
   for (int iter = 0; iter < Nrec_; ++iter) {
     // Standard 1x1 convolution.
@@ -308,10 +312,12 @@ const vector<Blob<Dtype>*>& top) {
         (Dtype)1., top[0]->gpu_data(), weights, (Dtype)0.,
         mid_.mutable_gpu_data());
     caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
-    // Compute activation function in-place.
-    forward_activation_func_gpu(top, top);  // a_{i+1} = \sigma(a_{i+1});
-    // Apply BN in-place
+    // Compute activation function in-place before BN.
+    if (bn_after_activation_) { forward_activation_func_gpu(top, top); }
+    // Apply BN in-place.
     forward_BN_gpu(top, iter);
+    // Compute activation function in-place after BN.
+    if (!bn_after_activation_) { forward_activation_func_gpu(top, top); }
   }
   // Permute top from N*H*W*C to N*C*H*W and copy to mid_.
   permute_blobs_gpu(top, !channel_last, !permute_diffs);
@@ -471,8 +477,9 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
   // TOP Data & Diff are now in BOTTOM, permuted in order (N*H*W) x C.
   for (int iter = Nrec_ - 1; iter >= 0; --iter) {
+    if (!bn_after_activation_) { backward_activation_func_gpu(bottom, bottom); }
     backward_BN_gpu(bottom, iter);
-    backward_activation_func_gpu(bottom, bottom);
+    if (bn_after_activation_) { backward_activation_func_gpu(bottom, bottom); }
     // Invert data (bottom[0])*inv(W)->data(mid_),
     // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
     const int wt_offset = rand_wt_order_[iter];
@@ -500,11 +507,15 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
     caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
   }
+  if (!bn_after_activation_ && apply_pre_activation_) {
+    // Invert the initial activation layer & backpropagate diffs.
+    backward_activation_func_gpu(bottom, bottom);
+  }
   if (apply_pre_bn_) {
     // Invert the initial batch normalization layer & backpropagate diffs.
     backward_BN_gpu(bottom, -1);
   }
-  if (apply_pre_activation_) {
+  if (bn_after_activation_ && apply_pre_activation_) {
     // Invert the initial activation layer & backpropagate diffs.
     backward_activation_func_gpu(bottom, bottom);
   }

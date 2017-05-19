@@ -1107,6 +1107,15 @@ message RecursiveConvParameter {
   optional bool apply_scale = 9 [default = true];  // Apply scale after each BN.
   optional bool apply_bias = 10 [default = true];  // Apply shift after each BN.
 
+  // By default, apply BN after activation. This goes against what is commonly
+  // observed in most popular DCNN architectures, which apply activation after
+  // batch-normalization. However, experiments by @ducha-aiki show improvements
+  // when activations are applied before BN:
+  // (https://github.com/ducha-aiki/caffenet-benchmark)
+  // Set the parameter below to false for the commonly used BN + activation.
+  // Note that the optional scale + shift is always applied after BN.
+  optional bool bn_after_activation = 11 [default = true];
+
   // Let G be the normalized/regularized gradient computed by the solver.
   // (G is already scaled by the learning rate).
   // Instead of standard weight update W <- W - G, the weights are instead
@@ -1120,11 +1129,9 @@ message RecursiveConvParameter {
   // orth_norm_type == "Det"   => f = abs(determinant) = product of eigenvalues.
   // orth_norm_type == "RMS"   => f = root mean square.
   // orth_norm_type == "None"  => f = 1.
-  optional string orth_norm_type = 11 [default = "None"];
+  optional string orth_norm_type = 12 [default = "None"];
 
-  optional ReLUParameter relu_param = 12;
-  optional PReLUParameter prelu_param = 13;
-  optional ELUParameter elu_param = 14;
+  optional ReLUParameter relu_param = 13;
 }
 
 // Message that stores parameters used by ReductionLayer

@@ -153,6 +153,9 @@ class RecursiveConvLayer : public Layer<Dtype> {
   // For Scale/Shift after batch-norm.
   bool apply_scale_, apply_bias_;
 
+  // "BN + activation" or "activation + BN"
+  bool bn_after_activation_;
+
   // --- Temporary (for debugging) ---
   inline void test_print(const int M, const int N, const Dtype* const A) const {
     for (int i = 0; i < M; ++i) {
