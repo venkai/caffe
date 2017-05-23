@@ -323,6 +323,9 @@ const vector<Blob<Dtype>*>& top) {
   permute_blobs_gpu(top, !channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
   caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
+  if (cache_top_ && share_buffer_) {
+    caffe_copy(count_, top[0]->gpu_data(), top_cache_.mutable_gpu_data());
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -467,6 +470,11 @@ void RecursiveConvLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
 const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   if (!this->param_propagate_down_[0] && !propagate_down[0]) {
     return;
+  }
+  if (cache_top_ && share_buffer_) {
+    caffe_copy(count_, top_cache_.gpu_data(), top[0]->mutable_gpu_data());
+  } else if (cache_top_ && !share_buffer_) {
+    caffe_copy(count_, mid_.gpu_data(), top[0]->mutable_gpu_data());
   }
   const bool channel_last = true;
   const bool permute_diffs = true;

@@ -1071,6 +1071,13 @@ message RecursiveConvParameter {
   // num_unique_weights <= num_recursive_layers
   optional uint32 num_unique_weights = 2 [default = 10];
 
+  // Cache top activation in an internal buffer blob.
+  // This is only necessary if subsequent in-place layers clobber top.
+  // If there is no in-place layer immediately after this layer, the
+  // param below can be set to false to save some memory.
+  // By default, this is true during TRAIN and false during TEST.
+  optional bool cache_top = 3;
+
   // The filler for the recursive convolution weights
   // The only supported types are
   // - "gaussian" (with std > 0.001, no sparsity) or
@@ -1078,7 +1085,7 @@ message RecursiveConvParameter {
   // Note that weights will be orthogonalized after initialization,
   // so the only requirement of the filler is that it generates
   // non-singular weight matrices up to machine precision.
-  optional FillerParameter weight_filler = 3;
+  optional FillerParameter weight_filler = 4;
 
   // By default weights will be orthogonalized only when weight_filler is used
   // to fill random weights. Preloaded weights during inference or training will
@@ -1086,26 +1093,26 @@ message RecursiveConvParameter {
   // setting the parameter below to true/false.
   // true: always perform initial orthogonalization during LayerSetUp.
   // false: always skip initial orthogonalization during LayerSetUp.
-  optional bool orth_init = 4;
+  optional bool orth_init = 5;
 
   // Apply an additional activation layer before convolution
-  optional bool apply_pre_activation = 5 [default = true];
+  optional bool apply_pre_activation = 6 [default = true];
 
   // Apply an additional batch normalization layer before convolution
-  optional bool apply_pre_bn = 6 [default = true];
+  optional bool apply_pre_bn = 7 [default = true];
 
   // Resets all global batch normalization params.
   // This may be useful in finetuning a network, where you might want to
   // start recomputing global means/variances from scratch.
   // If use_global_stats == true in batch_norm_param, then the params are reset
   // to have zero mean and unit variance (i.e. no batch normalization).
-  optional bool reset_bn_params = 7 [default = false];
+  optional bool reset_bn_params = 8 [default = false];
 
-  optional BatchNormParameter batch_norm_param = 8;
+  optional BatchNormParameter batch_norm_param = 9;
 
   // Scale + Shift After Batch Norm.
-  optional bool apply_scale = 9 [default = true];  // Apply scale after each BN.
-  optional bool apply_bias = 10 [default = true];  // Apply shift after each BN.
+  optional bool apply_scale = 10 [default = true];  // Apply scale after each BN.
+  optional bool apply_bias = 11 [default = true];  // Apply shift after each BN.
 
   // By default, apply BN after activation. This goes against what is commonly
   // observed in most popular DCNN architectures, which apply activation after
@@ -1114,7 +1121,7 @@ message RecursiveConvParameter {
   // (https://github.com/ducha-aiki/caffenet-benchmark)
   // Set the parameter below to false for the commonly used BN + activation.
   // Note that the optional scale + shift is always applied after BN.
-  optional bool bn_after_activation = 11 [default = true];
+  optional bool bn_after_activation = 12 [default = true];
 
   // Let G be the normalized/regularized gradient computed by the solver.
   // (G is already scaled by the learning rate).
@@ -1129,9 +1136,9 @@ message RecursiveConvParameter {
   // orth_norm_type == "Det"   => f = abs(determinant) = product of eigenvalues.
   // orth_norm_type == "RMS"   => f = root mean square.
   // orth_norm_type == "None"  => f = 1.
-  optional string orth_norm_type = 12 [default = "None"];
+  optional string orth_norm_type = 13 [default = "None"];
 
-  optional ReLUParameter relu_param = 13;
+  optional ReLUParameter relu_param = 14;
 }
 
 // Message that stores parameters used by ReductionLayer
