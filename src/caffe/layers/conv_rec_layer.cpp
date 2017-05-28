@@ -362,6 +362,20 @@ const vector<Blob<Dtype>*>& top) {
   // To activate RecursiveConvLayer<Dtype>::Reshape the first time.
   // Note that N_, H_, W_ can change but C_ can't change after LayerSetUp.
   N_ = 0; H_ = 0; W_ = 0;
+
+  trn_iter_ = rec_conv_param.trn_iter();
+  debug_info_ = rec_conv_param.debug_info();
+  db_S_ = rec_conv_param.db_mat_size();
+  name_ = this->layer_param_.name();
+  top_name_ = this->layer_param_.top(0);
+  bdiff_ = static_cast<Dtype>(-1.);
+  bdata_ = static_cast<Dtype>(-1.);
+  pdiff_.resize(Nwts_, static_cast<Dtype>(-1.));
+  pdata_.resize(Nwts_, static_cast<Dtype>(-1.));
+  log_diff_thresh_ = static_cast<Dtype>(3);
+  exit_counter_ = 0;
+  num_max_violations_ = 10;
+  debug_info_ = true;
 }
 
 template <typename Dtype>

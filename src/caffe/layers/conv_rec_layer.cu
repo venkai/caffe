@@ -485,12 +485,12 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
   // TOP Data & Diff are now in BOTTOM, permuted in order (N*H*W) x C.
   for (int iter = Nrec_ - 1; iter >= 0; --iter) {
+    const int wt_offset = rand_wt_order_[iter];
     if (!bn_after_activation_) { backward_activation_func_gpu(bottom, bottom); }
     backward_BN_gpu(bottom, iter);
     if (bn_after_activation_) { backward_activation_func_gpu(bottom, bottom); }
     // Invert data (bottom[0])*inv(W)->data(mid_),
     // compute diff(W) and backprop diff(bottom[0])->diff(mid_).
-    const int wt_offset = rand_wt_order_[iter];
     const Dtype* const weights = this->blobs_[wt_offset]->gpu_data();
     Dtype* const weights_diff = this->blobs_[wt_offset]->mutable_gpu_diff();
     // First get BOTTOM data using the inverse of weights.
@@ -514,6 +514,54 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
     // Transfer Data & Diff from mid_ to bottom[0].
     caffe_copy(count_, mid_.gpu_data(), bottom[0]->mutable_gpu_data());
     caffe_copy(count_, mid_.gpu_diff(), bottom[0]->mutable_gpu_diff());
+
+    // ----------------------------------------------------------------------
+    // ---------------------------- Debugging -------------------------------
+    // ----------------------------------------------------------------------
+    if (!debug_info_) { continue; }
+    const Dtype bdiff = bottom[0]->asum_diff() / count_;
+    const Dtype pdiff =
+        this->blobs_[wt_offset]->asum_diff() / this->blobs_[wt_offset]->count();
+    const Dtype bdata = bottom[0]->asum_data() / count_;
+    const Dtype pdata =
+        this->blobs_[wt_offset]->asum_data() / this->blobs_[wt_offset]->count();
+    if ((bdiff > 0. && bdiff_ > 0.
+        && abs(log(bdiff) - log(bdiff_)) >= log_diff_thresh_)
+        || (bdata > 0. && bdata_ > 0.
+        && abs(log(bdata) - log(bdata_)) >= log_diff_thresh_)) {
+      ++exit_counter_;
+      LOG(INFO) << name_ << ", R-iter: " << iter << ", " << top_name_
+          << " -> curr diff: " << bdiff << ", prev diff: " << bdiff_;
+      printf("%s diff\n", top_name_.c_str()); test_print(bottom[0], true);
+      LOG(INFO) << name_ << ", R-iter: " << iter << ", " << top_name_
+          << " -> curr data: " << bdata << ", prev data: " << bdata_;
+      printf("%s data\n", top_name_.c_str()); test_print(bottom[0], false);
+      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << "violations.";
+    }
+    if (pdiff > 0. && pdiff_[wt_offset] > 0.
+        && abs(log(pdiff) - log(pdiff_[wt_offset])) >= log_diff_thresh_) {
+      ++exit_counter_;
+      LOG(INFO) << name_ << ", R-iter: " << iter << ", W[" << wt_offset <<
+          "] -> curr diff: " << pdiff << ", prev diff: " << pdiff_[wt_offset];
+      printf("%s weight W[%d] diff\n", name_.c_str(), wt_offset);
+      test_print(this->blobs_[wt_offset].get(), true);
+      LOG(INFO) << name_ << ", R-iter: " << iter << ", W[" << wt_offset <<
+          "] -> curr data: " << pdata << ", prev data: " << pdata_[wt_offset];
+      printf("%s weight W[%d] data\n", name_.c_str(), wt_offset);
+      test_print(this->blobs_[wt_offset].get(), false);
+      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << "violations.";
+    }
+    CHECK_LE(exit_counter_, num_max_violations_) << "Exitting training at Layer"
+        << name_ << " with top/bottom = " << top_name_ << " after " << trn_iter_
+        << " iterations.";
+    bdiff_ = bdiff;
+    pdiff_[wt_offset] = pdiff;
+    bdata_ = bdata;
+    pdata_[wt_offset] = pdata;
+    // ----------------------------------------------------------------------
+    // -------------------------- End Debugging -----------------------------
+    // ----------------------------------------------------------------------
+
   }
   if (!bn_after_activation_ && apply_pre_activation_) {
     // Invert the initial activation layer & backpropagate diffs.
@@ -539,6 +587,8 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   // the weights always remain orthogonal in a natural way while simultaneously
   // optimizing the problem at hand.
   requires_orth_weight_update_ = Nrec_ > 0;
+
+  ++trn_iter_;
 }
 
 INSTANTIATE_LAYER_GPU_FUNCS(RecursiveConvLayer);

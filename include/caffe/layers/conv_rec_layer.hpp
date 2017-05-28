@@ -165,18 +165,44 @@ class RecursiveConvLayer : public Layer<Dtype> {
   bool bn_after_activation_;
 
   // --- Temporary (for debugging) ---
-  inline void test_print(const int M, const int N, const Dtype* const A) const {
+  bool debug_info_;
+  int trn_iter_;
+  int db_S_;
+  string name_;
+  string top_name_;
+  Dtype bdata_;
+  vector<Dtype> pdata_;
+  Dtype bdiff_;
+  vector<Dtype> pdiff_;
+  Dtype log_diff_thresh_;
+  int exit_counter_;
+  int num_max_violations_;
+  inline void test_print(const int M, const int N, const int K,
+      const Dtype* const A) const {
     for (int i = 0; i < M; ++i) {
       for (int j = 0; j < N; ++j) {
-        printf("%0.4f\t", A[(i * N) + j]);
+        printf("%0.4f\t", A[(i * K) + j]);
       }
       printf("\n");
     }
   }
+  inline void test_print(const int M, const int N, const Dtype* const A) const {
+    test_print(M, N, N, A);
+  }
   inline void test_print(const int N, const Dtype* const A) const {
     test_print(N, N, A);
   }
-  inline void test_print(const Blob<Dtype>* const A) const {
+  inline void test_print(const int M, const int N, const Blob<Dtype>* const B,
+      const bool disp_diff = false) const {
+    const Dtype* const A = disp_diff ? B->cpu_data() : B->cpu_diff();
+    const int K = B->num_axes() == 1 ? B->shape(0) : B->shape(1);
+    test_print(M, N, K, A);
+  }
+  inline void test_print(const Blob<Dtype>* const B,
+      const bool disp_diff = false) const {
+    test_print(db_S_, db_S_, B, disp_diff);
+  }
+  inline void test_print_full(const Blob<Dtype>* const A) const {
     if (A->num_axes() > 1) {
       test_print(A->shape(0), A->shape(1), A->cpu_data());
     } else {

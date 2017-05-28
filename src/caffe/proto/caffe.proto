@@ -1139,6 +1139,10 @@ message RecursiveConvParameter {
   optional string orth_norm_type = 13 [default = "None"];
 
   optional ReLUParameter relu_param = 14;
+
+  optional bool debug_info = 15 [default = false];
+  optional uint32 trn_iter = 16 [default = 0];
+  optional uint32 db_mat_size = 17 [default = 4];
 }
 
 // Message that stores parameters used by ReductionLayer
