@@ -69,6 +69,9 @@ class RecursiveConvLayer : public Layer<Dtype> {
   // Roughly in decreasing order of size.
   // These should ideally be reused by layers which inherit from this class.
   Blob<Dtype> mid_;  // N*C*H*W buffer used for most intermediate computations.
+  // Another buffer the same size as mid_. This is only allocated if both
+  // cache_top is true and mid_ is not shared across layers.
+  Blob<Dtype> top_cache_;
   Blob<Dtype> bn_mu_;  // local BN mean: Nrec_ x C_.
   Blob<Dtype> bn_sigma_;  // local BN sigma: Nrec_ x No_.
   Blob<Dtype> batch_sum_multiplier_;  // All ones size of 1x (N_*H_*W_).
@@ -99,6 +102,11 @@ class RecursiveConvLayer : public Layer<Dtype> {
   // These are made private to avoid namespace clutter
 
   static constexpr int num_axes_ = 4;
+
+  // Specifies if top blob needs to be cached, so that subsequent in-place
+  // layers can safely clobber it.
+  bool cache_top_;
+  bool share_buffer_;  // Share large internal buffer mid_ across layers.
 
   // Initialized "false" at LayerSetUp. Always "true" after first Backward Pass.
   // The next Forward pass will project the solver's regularized weight diffs

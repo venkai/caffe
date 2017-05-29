@@ -30,6 +30,10 @@ const vector<Blob<Dtype>*>& top) {
   for (int i = 0; i < Nrec_; ++i) {
     rand_wt_order_.push_back(i % Nwts_);
   }
+  cache_top_ = this->phase_ == TRAIN;
+  if (rec_conv_param.has_cache_top()) {
+    cache_top_ = rec_conv_param.cache_top();
+  }
   orth_norm_type_ = rec_conv_param.orth_norm_type();
   CHECK(orth_norm_type_ == "Det" || orth_norm_type_ == "RMS"
       || orth_norm_type_ == "None")
@@ -196,6 +200,8 @@ const vector<Blob<Dtype>*>& top) {
   if (this->layer_param_.param_size() == 2) {
     lr_mult_sc = this->layer_param_.param(1).lr_mult();
     decay_mult_sc = this->layer_param_.param(1).decay_mult();
+    lr_mult_wts = this->layer_param_.param(0).lr_mult();
+    decay_mult_wts = this->layer_param_.param(0).decay_mult();
   } else if (this->layer_param_.param_size() == 1) {
     lr_mult_sc = lr_mult_wts = this->layer_param_.param(0).lr_mult();
     decay_mult_sc = decay_mult_wts = this->layer_param_.param(0).decay_mult();
@@ -448,6 +454,21 @@ const vector<Blob<Dtype>*>& top) {
       top[1]->ShareDiff(mid_);
     }
   }
+
+  share_buffer_ = bottom.size() > 1 || top.size() > 1;
+  if (cache_top_ && share_buffer_) {
+    top_cache_.ReshapeLike(*top[0]);
+    switch (Caffe::mode()) {
+      case Caffe::CPU:
+        caffe_set(count_, Dtype(0), top_cache_.mutable_cpu_data());
+        break;
+      case Caffe::GPU:
+#ifndef CPU_ONLY
+        caffe_gpu_set(count_, Dtype(0), top_cache_.mutable_gpu_data());
+#endif
+        break;
+    }
+  }
 }
 
 // Used to preprocess param blobs (one time) if needed.
@@ -673,6 +694,9 @@ const vector<Blob<Dtype>*>& top) {
   permute_blobs_cpu(top, !channel_last, !permute_diffs);
   top[0]->ReshapeLike(mid_);
   caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
+  if (cache_top_ && share_buffer_) {
+    caffe_copy(count_, top[0]->cpu_data(), top_cache_.mutable_cpu_data());
+  }
 }
 
 // ----------------------------------------------------------------------------
@@ -806,6 +830,11 @@ void RecursiveConvLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
 const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
   if (!this->param_propagate_down_[0] && !propagate_down[0]) {
     return;
+  }
+  if (cache_top_ && share_buffer_) {
+    caffe_copy(count_, top_cache_.cpu_data(), top[0]->mutable_cpu_data());
+  } else if (cache_top_ && !share_buffer_) {
+    caffe_copy(count_, mid_.cpu_data(), top[0]->mutable_cpu_data());
   }
   const bool channel_last = true;
   const bool permute_diffs = true;
