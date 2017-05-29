@@ -200,6 +200,8 @@ const vector<Blob<Dtype>*>& top) {
   if (this->layer_param_.param_size() == 2) {
     lr_mult_sc = this->layer_param_.param(1).lr_mult();
     decay_mult_sc = this->layer_param_.param(1).decay_mult();
+    lr_mult_wts = this->layer_param_.param(0).lr_mult();
+    decay_mult_wts = this->layer_param_.param(0).decay_mult();
   } else if (this->layer_param_.param_size() == 1) {
     lr_mult_sc = lr_mult_wts = this->layer_param_.param(0).lr_mult();
     decay_mult_sc = decay_mult_wts = this->layer_param_.param(0).decay_mult();
@@ -375,7 +377,7 @@ const vector<Blob<Dtype>*>& top) {
   log_diff_thresh_ = static_cast<Dtype>(3);
   exit_counter_ = 0;
   num_max_violations_ = 10;
-  debug_info_ = true;
+  // debug_info_ = true && name_ == "res2_1";
 }
 
 template <typename Dtype>

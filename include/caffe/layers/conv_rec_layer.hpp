@@ -168,8 +168,8 @@ class RecursiveConvLayer : public Layer<Dtype> {
   bool debug_info_;
   int trn_iter_;
   int db_S_;
-  string name_;
-  string top_name_;
+  std::string name_;
+  std::string top_name_;
   Dtype bdata_;
   vector<Dtype> pdata_;
   Dtype bdiff_;
@@ -180,10 +180,11 @@ class RecursiveConvLayer : public Layer<Dtype> {
   inline void test_print(const int M, const int N, const int K,
       const Dtype* const A) const {
     for (int i = 0; i < M; ++i) {
+      std::ostringstream buffer;
       for (int j = 0; j < N; ++j) {
-        printf("%0.4f\t", A[(i * K) + j]);
+        buffer << "  " << A[(i * K) + j];
       }
-      printf("\n");
+      LOG(INFO) << buffer.str();
     }
   }
   inline void test_print(const int M, const int N, const Dtype* const A) const {
@@ -194,13 +195,23 @@ class RecursiveConvLayer : public Layer<Dtype> {
   }
   inline void test_print(const int M, const int N, const Blob<Dtype>* const B,
       const bool disp_diff = false) const {
-    const Dtype* const A = disp_diff ? B->cpu_data() : B->cpu_diff();
+    const Dtype* const A = disp_diff ? B->cpu_diff() : B->cpu_data();
     const int K = B->num_axes() == 1 ? B->shape(0) : B->shape(1);
     test_print(M, N, K, A);
   }
   inline void test_print(const Blob<Dtype>* const B,
       const bool disp_diff = false) const {
     test_print(db_S_, db_S_, B, disp_diff);
+  }
+  inline void test_print(const Blob<Dtype>* const B, std::string S,
+      const bool disp_diff = false) const {
+    if (disp_diff) {
+      LOG(INFO) << S << " diff = ";
+    } else {
+      LOG(INFO) << S << " data = ";
+    }
+    test_print(db_S_, db_S_, B, disp_diff);
+    LOG(INFO) << " ------------------------------------ ";
   }
   inline void test_print_full(const Blob<Dtype>* const A) const {
     if (A->num_axes() > 1) {

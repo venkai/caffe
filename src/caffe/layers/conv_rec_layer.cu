@@ -40,6 +40,26 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
     // Recover previous iter weights which solver update clobbered W <- W + G.
     caffe_gpu_axpy<Dtype>(this->blobs_[i]->count(), Dtype(1),
         this->blobs_[i]->gpu_diff(), this->blobs_[i]->mutable_gpu_data());
+
+    // ----------------------------------------------------------------------
+    // ---------------------------- Debugging -------------------------------
+    // ----------------------------------------------------------------------
+    if (!debug_info_) { continue; }
+    std::ostringstream S;
+    S << "Layer " << name_ << " weight W[" << i << "]' * W[" << i << "]";
+    // Test Orthogonality before update
+    LOG(INFO) << "Layer " << name_ << ": Before W[" << i << "] orth update";
+    test_print(this->blobs_[i].get(), "W[" + std::to_string(i) + "]", false);
+    test_print(this->blobs_[i].get(), "W[" + std::to_string(i) + "]", true);
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        this->blobs_[i]->gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
+        wt_buffer_.mutable_gpu_data());
+    test_print(&wt_buffer_, S.str(), false);
+
+    // ----------------------------------------------------------------------
+    // -------------------------- End Debugging -----------------------------
+    // ----------------------------------------------------------------------
+
     // wt_buffer_ = transpose(G) * W.
     caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
         this->blobs_[i]->gpu_diff(), this->blobs_[i]->gpu_data(),
@@ -99,6 +119,23 @@ void RecursiveConvLayer<Dtype>::orth_weight_update_gpu() {
         A_.mutable_gpu_data(), tau_.mutable_gpu_data(),
         this->blobs_[i]->mutable_gpu_data(), Lwork_,
         workspace_.mutable_gpu_data(), dev_info_.mutable_gpu_data());
+
+    // ----------------------------------------------------------------------
+    // ---------------------------- Debugging -------------------------------
+    // ----------------------------------------------------------------------
+    if (!debug_info_) { continue; }
+    // Test Orthogonality after update
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, C_, C_, C_, (Dtype)1.,
+        this->blobs_[i]->gpu_data(), this->blobs_[i]->gpu_data(), (Dtype)0.,
+        wt_buffer_.mutable_gpu_data());
+    LOG(INFO) << "Layer " << name_ << ": After W[" << i << "] orth update";
+    test_print(this->blobs_[i].get(), "W[" + std::to_string(i) + "]", false);
+    test_print(this->blobs_[i].get(), "W[" + std::to_string(i) + "]", true);
+    test_print(&wt_buffer_, S.str(), false);
+    // ----------------------------------------------------------------------
+    // -------------------------- End Debugging -----------------------------
+    // ----------------------------------------------------------------------
+
   }
   requires_orth_weight_update_ = false;
 }
@@ -532,26 +569,26 @@ const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
       ++exit_counter_;
       LOG(INFO) << name_ << ", R-iter: " << iter << ", " << top_name_
           << " -> curr diff: " << bdiff << ", prev diff: " << bdiff_;
-      printf("%s diff\n", top_name_.c_str()); test_print(bottom[0], true);
+      test_print(bottom[0], top_name_, true);
       LOG(INFO) << name_ << ", R-iter: " << iter << ", " << top_name_
           << " -> curr data: " << bdata << ", prev data: " << bdata_;
-      printf("%s data\n", top_name_.c_str()); test_print(bottom[0], false);
-      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << "violations.";
+      test_print(bottom[0], top_name_, false);
+      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << " violations.";
     }
     if (pdiff > 0. && pdiff_[wt_offset] > 0.
         && abs(log(pdiff) - log(pdiff_[wt_offset])) >= log_diff_thresh_) {
       ++exit_counter_;
       LOG(INFO) << name_ << ", R-iter: " << iter << ", W[" << wt_offset <<
           "] -> curr diff: " << pdiff << ", prev diff: " << pdiff_[wt_offset];
-      printf("%s weight W[%d] diff\n", name_.c_str(), wt_offset);
-      test_print(this->blobs_[wt_offset].get(), true);
+      std::ostringstream S;
+      S << "Layer " << name_ << " weight W[" << wt_offset << "]";
+      test_print(this->blobs_[wt_offset].get(), S.str(), true);
       LOG(INFO) << name_ << ", R-iter: " << iter << ", W[" << wt_offset <<
           "] -> curr data: " << pdata << ", prev data: " << pdata_[wt_offset];
-      printf("%s weight W[%d] data\n", name_.c_str(), wt_offset);
-      test_print(this->blobs_[wt_offset].get(), false);
-      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << "violations.";
+      test_print(this->blobs_[wt_offset].get(), S.str(), false);
+      LOG(INFO) << "Layer " << name_ << ", " << exit_counter_ << " violations.";
     }
-    CHECK_LE(exit_counter_, num_max_violations_) << "Exitting training at Layer"
+    CHECK_LE(exit_counter_, num_max_violations_) << "Exiting training at Layer "
         << name_ << " with top/bottom = " << top_name_ << " after " << trn_iter_
         << " iterations.";
     bdiff_ = bdiff;
