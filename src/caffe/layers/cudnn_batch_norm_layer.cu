@@ -26,7 +26,7 @@ void CuDNNBatchNormLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
   void* save_inv_var;
 
   if (is_type<Ftype>(FLOAT16)) {
-    if (this->phase_ == TRAIN) {
+    if (!this->use_global_stats_) {
       global_mean = this->blobs_[0]->template mutable_gpu_data<float>();
       global_var  = this->blobs_[1]->template mutable_gpu_data<float>();
       save_mean    = save_mean_->template mutable_gpu_data<float>();
@@ -43,7 +43,7 @@ void CuDNNBatchNormLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
       bias_data  = bias_zeros_->template gpu_data<float>();
     }
   } else {
-    if (this->phase_ == TRAIN) {
+    if (!this->use_global_stats_) {
       global_mean = this->blobs_[0]->template mutable_gpu_data<Ftype>();
       global_var  = this->blobs_[1]->template mutable_gpu_data<Ftype>();
       save_mean   = save_mean_->template mutable_gpu_data<Ftype>();
@@ -60,7 +60,7 @@ void CuDNNBatchNormLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
       bias_data  = bias_zeros_->template gpu_data<Ftype>();
     }
   }
-  if (this->phase_ == TRAIN) {
+  if (!this->use_global_stats_) {
     double factor = 1. - this->moving_average_fraction_;
     if (this->iter() == 0) {
       factor = 1.0;
@@ -70,15 +70,13 @@ void CuDNNBatchNormLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
         fwd_bottom_desc_, bottom_data, fwd_top_desc_, top_data,
         fwd_scale_bias_mean_var_desc_, scale_data, bias_data,
         factor, global_mean, global_var, epsilon, save_mean, save_inv_var));
-  } else if (this->phase_ == TEST) {
+  } else {
     CUDNN_CHECK(cudnnBatchNormalizationForwardInference(Caffe::cudnn_handle(0),
         CUDNN_BATCHNORM_SPATIAL,
         cudnn::dataType<Ftype>::one, cudnn::dataType<Ftype>::zero,
         fwd_bottom_desc_, bottom_data, fwd_top_desc_, top_data,
         fwd_scale_bias_mean_var_desc_, scale_data, bias_data,
         global_mean, global_var, epsilon));
-  } else {
-    LOG(FATAL) << "Unknown phase";
   }
   CUDA_CHECK(cudaStreamSynchronize(Caffe::thread_stream()));
 

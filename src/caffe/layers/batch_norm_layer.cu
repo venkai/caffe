@@ -19,7 +19,7 @@ BatchNormLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom, const vec
   const Ftype* global_mean = this->blobs_[0]->template gpu_data<Ftype>();
   const Ftype* global_var  = this->blobs_[1]->template gpu_data<Ftype>();
 
-  if (this->phase_ == TEST) {
+  if (this->use_global_stats_) {
     //  Y = X- EX
     multicast_gpu<Ftype>(N, C, S, global_mean, temp_NCHW_->template mutable_gpu_data<Ftype>());
     caffe_gpu_sub<Ftype>(top_size, bottom_data, temp_NCHW_->template gpu_data<Ftype>(), top_data);

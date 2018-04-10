@@ -14,8 +14,11 @@ BatchNormLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom, const vect
   moving_average_fraction_ = param.moving_average_fraction();
 
   clip_variance_ = false;
-  //use_global_stats_ = false;
-  use_global_stats_= param.use_global_stats();
+  if (param.has_use_global_stats()) {
+    use_global_stats_= param.use_global_stats();
+  } else {
+    use_global_stats_ = this->phase_ == TEST;
+  }
 
   if (bottom[0]->num_axes() == 1)
     channels_ = 1;
@@ -23,10 +26,12 @@ BatchNormLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom, const vect
     channels_ = bottom[0]->shape(1);
   eps_ = std::max<float>(param.eps(), 0.00001f);
 
-  scale_bias_ = false;
-  scale_bias_ = param.scale_bias(); // by default = false;
   if (param.has_scale_filler() || param.has_bias_filler()) { // implicit set
     scale_bias_ = true;
+  } else if (param.has_scale_bias()) {
+    scale_bias_ = param.scale_bias();
+  } else {
+    scale_bias_ = false;
   }
 
   if (this->blobs_.size() > 0) {
@@ -45,10 +50,16 @@ BatchNormLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom, const vect
     this->blobs_[0]->set_data(0.);
     this->blobs_[1] = Blob::create(btype, btype);  // variance1
     this->blobs_[1]->Reshape(shape);
-    this->blobs_[1]->set_data(0.);
+    // Set BN layer to perform identity mapping if weights are
+    // not provided and use_global_stats_ is true.
+    if (use_global_stats_) {
+      this->blobs_[1]->set_data(1. - eps_);
+    } else {
+      this->blobs_[1]->set_data(0.);
+    }
     this->blobs_[2] = Blob::create(btype, btype);  // variance correction
     this->blobs_[2]->Reshape(shape1);
-    this->blobs_[2]->set_data(1.);
+    this->blobs_[2]->set_data(0.);
     if (scale_bias_) {
       this->blobs_[3] = Blob::create(btype, btype);  // scale
       this->blobs_[3]->Reshape(shape);
@@ -174,7 +185,7 @@ BatchNormLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom, const vec
   const Ftype* global_mean = this->blobs_[0]->template cpu_data<Ftype>();
   const Ftype* global_var  = this->blobs_[1]->template cpu_data<Ftype>();
 
-  if (this->phase_ == TEST) {
+  if (use_global_stats_) {
     if (bottom[0] != top[0]) {
       caffe_copy(top_size, bottom_data, top_data);
     }
