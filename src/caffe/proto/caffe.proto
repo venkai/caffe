@@ -174,7 +174,7 @@ message AnnotatedDatum {
   // Each group contains annotation for a particular class.
   repeated AnnotationGroup annotation_group = 3;
   // Unique record index assigned by Reader
-  optional uint32 record_id = 4 [default = 0];  
+  optional uint32 record_id = 4 [default = 0];
 }
 
 enum DatumTypeInfo {
@@ -230,7 +230,7 @@ message FillerParameter {
   // The filler type. Can be one of the following:
   // constant, gaussian, positive_unitball, uniform, xavier,
   // msra, bilinear, or their static versions:
-  // gaussianstatic, positive_unitballstatic, uniformstatic, 
+  // gaussianstatic, positive_unitballstatic, uniformstatic,
   // xavierstatic, msrastatic, bilinearstatic
   // In the static version the random number generator is only
   // called once, and subsequent calls to fill blob, will write
@@ -258,7 +258,7 @@ message FillerParameter {
 
 message NetParameter {
   optional string name = 1; // consider giving the network a name
-  
+
   // DEPRECATED. See InputParameter. The input blobs to the network.
   repeated string input = 3;
   // DEPRECATED. See InputParameter. The shape of the input blobs.
@@ -296,7 +296,7 @@ message NetParameter {
   optional Type default_backward_type = 12 [default = FLOAT];
   optional Type default_forward_math  = 13 [default = FLOAT];
   optional Type default_backward_math = 14 [default = FLOAT];
-  
+
   // Global gradient scaling coefficient K (default - no scaling)
   //
   // Scenario 1: global_grad_scale_adaptive: true
@@ -381,13 +381,13 @@ message SolverParameter {
   // If true, run an initial test pass before the first iteration,
   // ensuring memory availability and printing the starting value of the loss.
   optional bool test_initialization = 32 [default = false];
-  
+
   optional int32 rampup_interval = 41 [default = 0];
   optional float rampup_lr = 42 [default = 0.];
   optional float min_lr = 43 [default = 0.];
-  
+
   optional float base_lr = 5; // The base learning rate
-  
+
   // the number of iterations between displaying info. If display = 0, no info
   // will be displayed.
   optional int32 display = 6;
@@ -418,20 +418,20 @@ message SolverParameter {
   optional float gamma = 9; // The parameter to compute the learning rate.
   optional float power = 10; // The parameter to compute the learning rate.
   optional float momentum = 11; // The momentum value.
-    
-  optional string momentum_policy = 46 [default = "fixed"];  
+
+  optional string momentum_policy = 46 [default = "fixed"];
   optional float max_momentum     = 47 [default = 0.99];
   optional float momentum_power   = 48 [default = 1.];
-  
+
   // LARC - Layer-wise Adaptive Rate Control
-  optional bool larc = 49 [default = false]; 
+  optional bool larc = 49 [default = false];
   optional string larc_policy = 50 [default = "scale"];
   optional float  larc_eta = 51    [default = 0.001];
-  
-  optional float  weight_decay = 12; // The weight decay.  
-  optional string weight_decay_policy = 52 [default = "fixed"]; 
+
+  optional float  weight_decay = 12; // The weight decay.
+  optional string weight_decay_policy = 52 [default = "fixed"];
   optional float  weight_decay_power  = 53 [default = 0.5];
-  
+
   // regularization types supported: L1 and L2
   // controlled by weight_decay
   optional string regularization_type = 29 [default = "L2"];
@@ -589,9 +589,9 @@ message LayerParameter {
   optional Type forward_type = 145 [default = FLOAT];
   // Type returned by Backward routines of a particular layer (aka 'Btype')
   optional Type backward_type = 146 [default = FLOAT];
-  // Internal math types. Works for those layers where internal math type 
+  // Internal math types. Works for those layers where internal math type
   // could be different compared to Ftype or Btype. For example, so called
-  // "pseudo fp32 mode" in convolution layers. For other layers has no meaning. 
+  // "pseudo fp32 mode" in convolution layers. For other layers has no meaning.
   optional Type forward_math = 147 [default = FLOAT];
   optional Type backward_math = 148 [default = FLOAT];
 
@@ -607,7 +607,7 @@ message LayerParameter {
 
   // The train / test phase for computation.
   optional Phase phase = 10;
-  
+
   // The amount of weight to assign each top blob in the objective.
   // Each layer assigns a default value, usually of either 0 or 1,
   // to each top blob.
@@ -810,7 +810,7 @@ message TransformationParameter {
 
   optional bool display = 22 [default = false];
   optional int32 num_labels = 23 [default = 0];
-  
+
   // Resize policy
   optional ResizeParameter resize_param = 208;
   // Noise policy
@@ -820,7 +820,7 @@ message TransformationParameter {
   // Expand policy
   optional ExpansionParameter expand_param = 214;
   // Constraint for emitting the annotation after transformation.
-  optional EmitConstraint emit_constraint = 210;  
+  optional EmitConstraint emit_constraint = 210;
 }
 // Message that stores parameters used to create gridbox ground truth
 message DetectNetGroundTruthParameter {
@@ -894,7 +894,7 @@ message DetectNetAugmentationParameter {
   //  desaturation augmentation off.
   optional float desaturation_prob = 12 [default = 0.33];
   optional float desaturation_max = 13 [default = 0.5];
-  
+
   // Resize policy
   optional ResizeParameter resize_param = 208;
   // Noise policy
@@ -904,7 +904,7 @@ message DetectNetAugmentationParameter {
   // Expand policy
   optional ExpansionParameter expand_param = 214;
   // Constraint for emitting the annotation after transformation.
-  optional EmitConstraint emit_constraint = 210;  
+  optional EmitConstraint emit_constraint = 210;
 }
 
 // Message that stores parameters used by data transformer for resize policy
@@ -1745,7 +1745,7 @@ message PoolingParameter {
   // If global_pooling then it will pool over the size of the bottom by doing
   // kernel_h = bottom->height and kernel_w = bottom->width
   optional bool global_pooling = 12 [default = false];
-  
+
   // FB pooling parameters
   // Use floor((height + 2 * padding - kernel) / stride) + 1
   // instead of ceil((height + 2 * padding - kernel) / stride) + 1
@@ -1941,6 +1941,15 @@ message ReshapeParameter {
   //
   optional int32 axis = 2 [default = 0];
   optional int32 num_axes = 3 [default = -1];
+  // For s = dense_reshape_scale, a blob of shape [N x (C*s*s) x H x W]
+  // is reshaped to [N x C x (H*s) x (W*s)], according to the paper
+  // "Real-Time Single Image and Video Super-Resolution Using an Efficient
+  // Sub-Pixel Convolutional Neural Network [https://arxiv.org/abs/1609.05158]"
+  // Note that for s > 1, the params: axis, num_axes, shape are ignored.
+  optional int32 dense_reshape_scale = 4 [default = 1];
+  // When true, the above operation is reversed, i.e [N x C x (H*s) x (W*s)]
+  // is reshaped to [N x (C*s*s) x H x W].
+  optional bool inv_dense_reshape = 5 [default = false];
 }
 
 message ScaleParameter {

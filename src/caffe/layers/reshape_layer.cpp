@@ -9,6 +9,11 @@ void ReshapeLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   CHECK_NE(top[0], bottom[0]) << this->type() << " Layer does not "
       "allow in-place computation.";
+  r_ = this->layer_param_.reshape_param().dense_reshape_scale();
+  CHECK_GE(r_, 1) << "dense_reshape_scale >= 1.";
+  r2_ = r_ * r_;
+  inv_dense_reshape_ = this->layer_param_.reshape_param().inv_dense_reshape();
+  if (r_ > 1) { return; }
   inferred_axis_ = -1;
   copy_axes_.clear();
   const BlobShape& top_blob_shape = this->layer_param_.reshape_param().shape();
@@ -31,6 +36,22 @@ void ReshapeLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom,
 template <typename Ftype, typename Btype>
 void ReshapeLayer<Ftype, Btype>::Reshape(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
+  if (r_ > 1) {
+    vector<int> top_shape = bottom[0]->shape();
+    if (inv_dense_reshape_) {
+      top_shape[1] *= r2_;
+      top_shape[2] /= r_;
+      top_shape[3] /= r_;
+    } else {
+      top_shape[1] /= r2_;
+      top_shape[2] *= r_;
+      top_shape[3] *= r_;
+    }
+    top[0]->Reshape(top_shape);
+    CHECK_EQ(top[0]->count(), bottom[0]->count())
+            << "output count must match input count";
+    return;
+  }
   const int input_start_axis = this->layer_param_.reshape_param().axis();
   const int start_axis = (input_start_axis >= 0) ? input_start_axis :
       bottom[0]->num_axes() + input_start_axis + 1;
@@ -87,8 +108,94 @@ void ReshapeLayer<Ftype, Btype>::Reshape(const vector<Blob*>& bottom,
   CHECK_EQ(top[0]->count(), bottom[0]->count())
       << "output count must match input count";
   top[0]->ShareData(*bottom[0]);
-  bottom[0]->ShareDiff(*top[0]);
+  top[0]->ShareDiff(*bottom[0]);
 }
+
+template <typename Ftype, typename Btype>
+void ReshapeLayer<Ftype, Btype>::dense_reshape_cpu(const vector<Blob*>& src,
+    const vector<Blob*>& dst, const bool inv, const bool reshape_diffs) {
+  const int N = src[0]->shape(0);
+  const int C = src[0]->shape(1);
+  const int H = src[0]->shape(2);
+  const int W = src[0]->shape(3);
+  const int new_C = inv ? (C * r2_) : (C / r2_);
+  const int new_H = inv ? (H / r_) : (H * r_);
+  const int new_W = inv ? (W / r_) : (W * r_);
+  int index = 0;
+  if (!reshape_diffs) {
+    const Ftype* const src_data = src[0]->cpu_data<Ftype>();
+    Ftype* const dst_data = dst[0]->mutable_cpu_data<Ftype>();
+    if (!inv) {
+      for (int n = 0; n < N; ++n) {
+        for (int c = 0; c < C; ++c) {
+          for (int h = 0; h < H; ++h) {
+            for (int w = 0; w < W; ++w) {
+              const int new_c = c / r2_;
+              const int new_h = (h * r_) + ((c / r_) % r_);
+              const int new_w = (w * r_) + (c % r_);
+              const int new_index =
+                (((((n * new_C) + new_c) * new_H) + new_h) * new_W) + new_w;
+              dst_data[new_index] = src_data[index++];
+            }
+          }
+        }
+      }
+    } else {
+      for (int n = 0; n < N; ++n) {
+        for (int c = 0; c < C; ++c) {
+          for (int h = 0; h < H; ++h) {
+            for (int w = 0; w < W; ++w) {
+              const int new_c = (c * r2_) + ((h % r_) * r_) + (w % r_);
+              const int new_h = h / r_;
+              const int new_w = w / r_;
+              const int new_index =
+                (((((n * new_C) + new_c) * new_H) + new_h) * new_W) + new_w;
+              dst_data[new_index] = src_data[index++];
+            }
+          }
+        }
+      }
+    }
+  } else {
+    const Btype* const src_diff = src[0]->cpu_diff<Btype>();
+    Btype* const dst_diff = dst[0]->mutable_cpu_diff<Btype>();
+    if (!inv) {
+      for (int n = 0; n < N; ++n) {
+        for (int c = 0; c < C; ++c) {
+          for (int h = 0; h < H; ++h) {
+            for (int w = 0; w < W; ++w) {
+              const int new_c = c / r2_;
+              const int new_h = (h * r_) + ((c / r_) % r_);
+              const int new_w = (w * r_) + (c % r_);
+              const int new_index =
+                (((((n * new_C) + new_c) * new_H) + new_h) * new_W) + new_w;
+              dst_diff[new_index] = src_diff[index++];
+            }
+          }
+        }
+      }
+    } else {
+      for (int n = 0; n < N; ++n) {
+        for (int c = 0; c < C; ++c) {
+          for (int h = 0; h < H; ++h) {
+            for (int w = 0; w < W; ++w) {
+              const int new_c = (c * r2_) + ((h % r_) * r_) + (w % r_);
+              const int new_h = h / r_;
+              const int new_w = w / r_;
+              const int new_index =
+                (((((n * new_C) + new_c) * new_H) + new_h) * new_W) + new_w;
+              dst_diff[new_index] = src_diff[index++];
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+#ifdef CPU_ONLY
+STUB_GPU(ReshapeLayer);
+#endif
 
 INSTANTIATE_CLASS_FB(ReshapeLayer);
 REGISTER_LAYER_CLASS(Reshape);
