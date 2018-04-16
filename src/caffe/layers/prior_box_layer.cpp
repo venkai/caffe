@@ -204,7 +204,7 @@ void PriorBoxLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
   if (variance_.size() == 1) {
     caffe_set(dim, Dtype(variance_[0]), top_data);
   } else {
-    int count = 0;
+    long count = 0;
     for (int h = 0; h < layer_height; ++h) {
       for (int w = 0; w < layer_width; ++w) {
         for (int i = 0; i < num_priors_; ++i) {

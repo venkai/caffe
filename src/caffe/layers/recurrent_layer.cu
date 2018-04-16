@@ -21,7 +21,7 @@ void RecurrentLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
   DCHECK_EQ(recur_input_blobs_.size(), recur_output_blobs_.size());
   if (!expose_hidden_) {
     for (int i = 0; i < recur_input_blobs_.size(); ++i) {
-      const int count = recur_input_blobs_[i]->count();
+      const long count = recur_input_blobs_[i]->count();
       DCHECK_EQ(count, recur_output_blobs_[i]->count());
       const Ftype* timestep_T_data = recur_output_blobs_[i]->gpu_data<Ftype>();
       Ftype* timestep_0_data = recur_input_blobs_[i]->mutable_gpu_data<Ftype>();

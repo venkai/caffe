@@ -205,7 +205,7 @@ void ImageDataLayer<Ftype, Btype>::load_batch(Batch* batch, int thread_id, size_
     cv::Mat cv_img = next_mat(root_folder, file_name, new_height, new_width, is_color, short_side);
 
     if (cv_img.data) {
-      int offset = batch->data_->offset(item_id);
+      long offset = batch->data_->offset(item_id);
 #if defined(USE_CUDNN)
       this->bdt(thread_id)->Transform(cv_img, prefetch_data + offset, buf_len, false);
 #else

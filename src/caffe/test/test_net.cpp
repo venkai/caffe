@@ -1292,7 +1292,7 @@ TYPED_TEST(NetTest, TestUnsharedWeightsDiffNet) {
   net->Backward();
   LayerBase* ip1_layer = net->layer_by_name("innerproduct1").get();
   LayerBase* ip2_layer = net->layer_by_name("innerproduct2").get();
-  const int count = ip1_layer->blobs()[0]->count();
+  const long count = ip1_layer->blobs()[0]->count();
   const Dtype* grad1 = ip1_layer->blobs()[0]->template cpu_diff<Dtype>();
   const Dtype* grad2 = ip2_layer->blobs()[0]->template cpu_diff<Dtype>();
   for (int i = 0; i < count; ++i) {
@@ -1311,7 +1311,7 @@ TYPED_TEST(NetTest, TestSharedWeightsDiffNet) {
   EXPECT_FLOAT_EQ(loss, 0);
   LayerBase* ip1_layer = net->layer_by_name("innerproduct1").get();
   LayerBase* ip2_layer = net->layer_by_name("innerproduct2").get();
-  const int count = ip1_layer->blobs()[0]->count();
+  const long count = ip1_layer->blobs()[0]->count();
   const Dtype* grad1 = ip1_layer->blobs()[0]->template cpu_diff<Dtype>();
   const Dtype* grad2 = ip2_layer->blobs()[0]->template cpu_diff<Dtype>();
   for (int i = 0; i < count; ++i) {
@@ -1342,7 +1342,7 @@ TYPED_TEST(NetTest, TestSharedWeightsUpdate) {
   const bool copy_diff = false;
   shared_params.CopyFrom(*ip1_weights, copy_diff, reshape);
   shared_params.CopyFrom(*ip1_weights, !copy_diff, reshape);
-  const int count = ip1_weights->count();
+  const long count = ip1_weights->count();
   // Make sure the diffs are non-trivial.
   for (int i = 0; i < count; ++i) {
     EXPECT_NE(0, ip1_weights->cpu_diff<Dtype>()[i]);
@@ -1448,7 +1448,7 @@ TYPED_TEST(NetTest, TestSharedWeightsResume) {
   const bool kReshape = true;
   const bool kCopyDiff = false;
   shared_params.CopyFrom(*ip1_weights, kCopyDiff, kReshape);
-  const int count = ip1_weights->count();
+  const long count = ip1_weights->count();
 
   // Write the net to a NetParameter, as in Solver::Snapshot.
   NetParameter net_param;

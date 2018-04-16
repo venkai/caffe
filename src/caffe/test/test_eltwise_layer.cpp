@@ -83,7 +83,7 @@ TYPED_TEST(EltwiseLayerTest, TestProd) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_a_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_b_->cpu_data();
   const Dtype* in_data_c = this->blob_bottom_c_->cpu_data();
@@ -94,7 +94,7 @@ TYPED_TEST(EltwiseLayerTest, TestProd) {
 
 TYPED_TEST(EltwiseLayerTest, TestSum) {
   typedef typename TypeParam::Dtype Dtype;
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_a_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_b_->cpu_data();
   const Dtype* in_data_c = this->blob_bottom_c_->cpu_data();
@@ -139,7 +139,7 @@ TYPED_TEST(EltwiseLayerTest, TestSumCoeff) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_a_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_b_->cpu_data();
   const Dtype* in_data_c = this->blob_bottom_c_->cpu_data();
@@ -228,7 +228,7 @@ TYPED_TEST(EltwiseLayerTest, TestMax) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_a_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_b_->cpu_data();
   const Dtype* in_data_c = this->blob_bottom_c_->cpu_data();

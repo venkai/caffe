@@ -6,7 +6,7 @@
 namespace caffe {
 
 template <typename Dtype>
-void Permute(const int count, Dtype* bottom_data, const bool forward,
+void Permute(const long count, Dtype* bottom_data, const bool forward,
     const int* permute_order, const int* old_steps, const int* new_steps,
     const int num_axes, Dtype* top_data) {
     for (int i = 0; i < count; ++i) {

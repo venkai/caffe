@@ -20,7 +20,7 @@ template <typename Ftype, typename Btype>
 void PowerLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   // Special case where we can ignore the input: scale or power is 0.
   if (diff_scale_ == 0.F) {
     Ftype value = (power_ == 0) ? Ftype(1) : Ftype(pow(shift_, power_));
@@ -46,7 +46,7 @@ void PowerLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<Blob*>& bottom) {
   if (propagate_down[0]) {
     Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     const Btype* top_diff = top[0]->cpu_diff<Btype>();
     if (diff_scale_ == 0.F || power_ == 1.F) {
       caffe_set(count, Btype(diff_scale_), bottom_diff);

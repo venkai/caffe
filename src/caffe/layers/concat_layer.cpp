@@ -58,7 +58,7 @@ void ConcatLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
       const vector<Blob*>& top) {
   if (bottom.size() == 1) { return; }
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
-  int offset_concat_axis = 0;
+  long offset_concat_axis = 0;
   const int top_concat_axis = top[0]->shape(concat_axis_);
   for (int i = 0; i < bottom.size(); ++i) {
     const Ftype* bottom_data = bottom[i]->cpu_data<Ftype>();
@@ -78,7 +78,7 @@ void ConcatLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
       const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   if (bottom.size() == 1) { return; }
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
-  int offset_concat_axis = 0;
+  long offset_concat_axis = 0;
   const int top_concat_axis = top[0]->shape(concat_axis_);
   for (int i = 0; i < bottom.size(); ++i) {
     const int bottom_concat_axis = bottom[i]->shape(concat_axis_);

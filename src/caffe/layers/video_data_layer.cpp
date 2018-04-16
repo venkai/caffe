@@ -127,7 +127,7 @@ void VideoDataLayer<Ftype, Btype>::load_batch(Batch* batch, int thread_id, size_
       skip_frames = skip_frames_;
       timer.Start();
       // Apply transformations (mirror, crop...) to the image
-      int offset = batch->data_->offset(item_id);
+      long offset = batch->data_->offset(item_id);
       transformed_datum.set_cpu_data(top_data + offset);
       this->bdt(0)->Transform(cv_img, &(transformed_datum));
       trans_time += timer.MicroSeconds();
@@ -136,7 +136,7 @@ void VideoDataLayer<Ftype, Btype>::load_batch(Batch* batch, int thread_id, size_
     read_time += timer.MicroSeconds();
     timer.Start();
     // Apply transformations (mirror, crop...) to the image
-    int offset = batch->data_->offset(item_id);
+    long offset = batch->data_->offset(item_id);
     transformed_datum.set_cpu_data(top_data + offset);
     this->bdt(0)->Transform(cv_img, &(transformed_datum));
     trans_time += timer.MicroSeconds();

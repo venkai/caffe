@@ -20,7 +20,7 @@ void
 DropoutLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom, const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   if (this->phase_ == TRAIN) {
     cudaStream_t stream = Caffe::thread_stream();
     unsigned int* mask = static_cast<unsigned int*>(rand_vec_.mutable_gpu_data());
@@ -53,7 +53,7 @@ void DropoutLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     if (this->phase_ == TRAIN) {  // Needed for TEST
       cudaStream_t stream = Caffe::thread_stream();
       const unsigned int* mask = rand_vec_.gpu_data();
-      const int count = bottom[0]->count();
+      const long count = bottom[0]->count();
       // NOLINT_NEXT_LINE(whitespace/operators)
       DropoutBackward<<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 0, stream>>>
           (count, top_diff, mask, uint_thres_, scale_, bottom_diff);

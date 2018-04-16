@@ -248,7 +248,7 @@ void AnnotatedDataLayer<Ftype, Btype>::load_batch(Batch* batch, int thread_id, s
             shape.begin() + 1));
     }
     // Apply data transformations (mirror, scale, crop...)
-    int offset = batch->data_->offset(item_id);
+    long offset = batch->data_->offset(item_id);
     transformed_datum.set_cpu_data(top_data + offset);
     vector<AnnotationGroup> transformed_anno_vec;
     if (this->output_labels_) {

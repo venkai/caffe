@@ -12,7 +12,7 @@ void BNLLLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->cpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   for (int i = 0; i < count; ++i) {
     top_data[i] = bottom_data[i] > 0 ?
         bottom_data[i] + log(1. + exp(-bottom_data[i])) :
@@ -28,7 +28,7 @@ void BNLLLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const Btype* bottom_data = bottom[0]->cpu_data<Btype>();
     const Btype* top_diff = top[0]->cpu_diff<Btype>();
     Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     float expval;
     for (int i = 0; i < count; ++i) {
       expval = exp(std::min(bottom_data[i], Btype(kBNLL_THRESHOLD)));

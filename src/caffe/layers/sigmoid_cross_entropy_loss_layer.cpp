@@ -32,7 +32,7 @@ void SigmoidCrossEntropyLossLayer<Ftype, Btype>::Forward_cpu(
   sigmoid_bottom_vec_[0] = bottom[0];
   sigmoid_layer_->Forward(sigmoid_bottom_vec_, sigmoid_top_vec_);
   // Compute the loss (negative log likelihood)
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   const int num = bottom[0]->num();
   // Stable version of loss computation from input data
   const Ftype* input_data = bottom[0]->cpu_data<Ftype>();
@@ -55,7 +55,7 @@ void SigmoidCrossEntropyLossLayer<Ftype, Btype>::Backward_cpu(
   }
   if (propagate_down[0]) {
     // First, compute the diff
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     const int num = bottom[0]->num();
     const Btype* sigmoid_output_data = sigmoid_output_->cpu_data();
     const Btype* target = bottom[1]->cpu_data<Btype>();

@@ -13,7 +13,7 @@ void HingeLossLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
   Ftype* bottom_diff = bottom[0]->mutable_cpu_diff<Ftype>();
   const Ftype* label = bottom[1]->cpu_data<Ftype>();
   int num = bottom[0]->num();
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   int dim = count / num;
 
   caffe_copy(count, bottom_data, bottom_diff);
@@ -50,7 +50,7 @@ void HingeLossLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();
     const Btype* label = bottom[1]->cpu_data<Btype>();
     int num = bottom[0]->num();
-    int count = bottom[0]->count();
+    long count = bottom[0]->count();
     int dim = count / num;
 
     for (int i = 0; i < num; ++i) {

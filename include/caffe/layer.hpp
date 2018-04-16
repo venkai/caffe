@@ -548,7 +548,7 @@ inline float Layer<Ftype, Btype>::Forward(const vector<Blob*>& bottom, const vec
       Forward_cpu(bottom, top);
       for (int top_id = 0; top_id < top.size(); ++top_id) {
         if (this->loss(top_id) == 0.F) { continue; }
-        const int count = top[top_id]->count();
+        const long count = top[top_id]->count();
         const Ftype* data = top[top_id]->cpu_data<Ftype>();
         const Ftype* loss_weights = top[top_id]->cpu_diff<Ftype>();
         loss += caffe_cpu_dot(count, data, loss_weights);
@@ -558,7 +558,7 @@ inline float Layer<Ftype, Btype>::Forward(const vector<Blob*>& bottom, const vec
       Forward_gpu(bottom, top);
       for (int top_id = 0; top_id < top.size(); ++top_id) {
         if (this->loss(top_id) == 0.F) { continue; }
-        const int count = top[top_id]->count();
+        const long count = top[top_id]->count();
         const Ftype* data = top[top_id]->gpu_data<Ftype>();
         const Ftype* loss_weights = top[top_id]->gpu_diff<Ftype>();
         float blob_loss = 0.F;

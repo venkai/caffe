@@ -21,7 +21,7 @@ __global__ void kernel_channel_max(const int num, const int channels,
 }
 
 template <typename Dtype>
-__global__ void kernel_channel_subtract(const int count,
+__global__ void kernel_channel_subtract(const long count,
     const int num, const int channels,
     const int spatial_dim, const Dtype* channel_max, Dtype* data) {
   CUDA_KERNEL_LOOP(index, count) {
@@ -32,7 +32,7 @@ __global__ void kernel_channel_subtract(const int count,
 }
 
 template <typename Dtype>
-__global__ void kernel_exp(const int count, const Dtype* data, Dtype* out) {
+__global__ void kernel_exp(const long count, const Dtype* data, Dtype* out) {
   CUDA_KERNEL_LOOP(index, count) {
     out[index] = exp(data[index]);
   }
@@ -53,7 +53,7 @@ __global__ void kernel_channel_sum(const int num, const int channels,
 }
 
 template <typename Dtype>
-__global__ void kernel_channel_div(const int count,
+__global__ void kernel_channel_div(const long count,
     const int num, const int channels,
     const int spatial_dim, const Dtype* channel_sum, Dtype* data) {
   CUDA_KERNEL_LOOP(index, count) {
@@ -85,7 +85,7 @@ void SoftmaxLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
   Ftype* scale_data = scale_.template mutable_gpu_data<Ftype>();
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   int channels = top[0]->shape(softmax_axis_);
   caffe_copy(count, bottom_data, top_data);
   cudaStream_t stream = Caffe::thread_stream();
@@ -125,7 +125,7 @@ void SoftmaxLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   const Btype* top_data = top[0]->gpu_data<Btype>();
   Btype* bottom_diff = bottom[0]->mutable_gpu_diff<Btype>();
   Btype* scale_data = scale_.template mutable_gpu_data<Btype>();
-  int count = top[0]->count();
+  long count = top[0]->count();
   int channels = top[0]->shape(softmax_axis_);
   caffe_copy(count, top_diff, bottom_diff);
   cudaStream_t stream = Caffe::thread_stream();

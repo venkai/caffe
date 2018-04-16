@@ -41,7 +41,7 @@ void Tensor::invalidate_others() {
   }
 }
 
-void Tensor::Reshape(int count) {
+void Tensor::Reshape(long count) {
   shared_ptr<SyncedMemory>& mem = mutable_synced_mem(false);
   if (!mem || count != count_) {
     mem = make_shared<SyncedMemory>(even(count) * tsize(type_));
@@ -75,7 +75,7 @@ void Tensor::convert(Type new_type) {
   new_mem->validate();
 }
 
-void Tensor::copy_helper(bool use_gpu, int count, const void* p_src, Type src_type,
+void Tensor::copy_helper(bool use_gpu, long count, const void* p_src, Type src_type,
     void* p_dst, Type dst_type) {
   bool failed = false;
   if (is_type<float>(src_type)) {
@@ -258,7 +258,7 @@ float Tensor::sumsq(int group) const {
   return sumsq;
 }
 
-void Tensor::cpu_scal(int count, Type dtype, void* data, float scal) {
+void Tensor::cpu_scal(long count, Type dtype, void* data, float scal) {
   if (is_type<float>(dtype)) {
     caffe_scal(count, scal, static_cast<float*>(data));
   } else if (is_type<float16>(dtype)) {
@@ -270,7 +270,7 @@ void Tensor::cpu_scal(int count, Type dtype, void* data, float scal) {
   }
 }
 
-void Tensor::gpu_scal(int count, Type dtype, void* data, float scal, cublasHandle_t cublas_handle) {
+void Tensor::gpu_scal(long count, Type dtype, void* data, float scal, cublasHandle_t cublas_handle) {
   if (is_type<float>(dtype)) {
     caffe_gpu_scal(count, scal, static_cast<float*>(data), cublas_handle);
   } else if (is_type<float16>(dtype)) {

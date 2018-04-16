@@ -131,7 +131,7 @@ TYPED_TEST(InnerProductLayerTest, TestForward) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   for (int i = 0; i < count; ++i) {
     EXPECT_GE(data[i], 1.);
   }
@@ -163,7 +163,7 @@ TYPED_TEST(InnerProductLayerTest, TestForwardTranspose) {
       new InnerProductLayer<Dtype, Dtype>(layer_param));
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   TBlob<Dtype>* const top = new TBlob<Dtype>();
   top->ReshapeLike(*this->blob_top_);
   caffe_copy<Dtype>(count, this->blob_top_->cpu_data(), top->mutable_cpu_data());
@@ -173,7 +173,7 @@ TYPED_TEST(InnerProductLayerTest, TestForwardTranspose) {
   shared_ptr<InnerProductLayer<Dtype, Dtype>> ip_t(
       new InnerProductLayer<Dtype, Dtype>(layer_param));
   ip_t->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
-  const int count_w = layer->blobs()[0]->count();
+  const long count_w = layer->blobs()[0]->count();
   EXPECT_EQ(count_w, ip_t->blobs()[0]->count());
   // manually copy and transpose the weights from 1st IP layer into 2nd
   const Dtype* w = layer->blobs()[0]->template cpu_data<Dtype>();
@@ -222,7 +222,7 @@ TYPED_TEST(InnerProductLayerTest, TestForwardNoBatch) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   for (int i = 0; i < count; ++i) {
     EXPECT_GE(data[i], 1.);
   }

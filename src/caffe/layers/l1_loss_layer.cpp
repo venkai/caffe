@@ -22,7 +22,7 @@ void L1LossLayer<Ftype, Btype>::Reshape(
 template <typename Ftype, typename Btype>
 void L1LossLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
                                            const vector<Blob*>& top) {
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   caffe_sub<Ftype>(
       count,
       bottom[0]->cpu_data<Ftype>(),

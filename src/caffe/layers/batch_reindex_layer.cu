@@ -9,7 +9,7 @@
 namespace caffe {
 
 template<typename Dtype>
-__global__ void BRForward(const int count, const int inner_dim, const Dtype* in,
+__global__ void BRForward(const long count, const int inner_dim, const Dtype* in,
                           const Dtype* permut, Dtype* out) {
   CUDA_KERNEL_LOOP(index, count) {
     int n = index / (inner_dim);
@@ -38,7 +38,7 @@ void BatchReindexLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
 }
 
 template<typename Dtype>
-__global__ void BRBackward(const int count, const int inner_dim,
+__global__ void BRBackward(const long count, const int inner_dim,
                            const Dtype* in, const int* top_indexes,
                            const int* begins, const int* counts,
                            Dtype* out) {

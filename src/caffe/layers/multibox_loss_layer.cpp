@@ -292,7 +292,7 @@ void MultiBoxLossLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
       caffe_scal(loc_pred_->count(), loss_weight, loc_pred_->mutable_cpu_diff<Dtype>());
       // Copy gradient back to bottom[0].
       const Dtype* loc_pred_diff = loc_pred_->cpu_diff<Dtype>();
-      int count = 0;
+      long count = 0;
       for (int i = 0; i < num_; ++i) {
         for (map<int, vector<int> >::iterator it =
              all_match_indices_[i].begin();
@@ -335,7 +335,7 @@ void MultiBoxLossLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
       // Copy gradient back to bottom[1].
       const Dtype* conf_pred_diff = conf_pred_->cpu_diff<Dtype>();
       if (do_neg_mining_) {
-        int count = 0;
+        long count = 0;
         for (int i = 0; i < num_; ++i) {
           // Copy matched (positive) bboxes scores' diff.
           const map<int, vector<int> >& match_indices = all_match_indices_[i];

@@ -61,7 +61,7 @@ class DetectionEvaluateLayer : public Layer<Ftype, Btype> {
   float overlap_threshold_;
   bool evaluate_difficult_gt_;
   vector<pair<int, int> > sizes_;
-  int count_;
+  long count_;
   bool use_normalized_bbox_;
 
   bool has_resize_;

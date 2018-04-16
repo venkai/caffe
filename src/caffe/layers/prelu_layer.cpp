@@ -68,7 +68,7 @@ void PReLULayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->cpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   const int dim = bottom[0]->count(2);
   const int channels = bottom[0]->channels();
   const Ftype* slope_data = this->blobs_[0]->template cpu_data<Ftype>();
@@ -95,7 +95,7 @@ void PReLULayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
   const Btype* bottom_data = bottom[0]->cpu_data<Btype>();
   const Btype* slope_data = this->blobs_[0]->template cpu_data<Btype>();
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   const int dim = bottom[0]->count(2);
   const int channels = bottom[0]->channels();
 

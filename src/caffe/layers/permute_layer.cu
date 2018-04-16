@@ -57,7 +57,7 @@ void PermuteLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
   if (need_permute_) {
     Dtype* bottom_data = const_cast<Dtype*>(bottom[0]->gpu_data<Dtype>());
     Dtype* top_data = top[0]->mutable_gpu_data<Dtype>();
-    int count = top[0]->count();
+    long count = top[0]->count();
     const int* permute_order = permute_order_.gpu_data();
     const int* new_steps = new_steps_.gpu_data();
     const int* old_steps = old_steps_.gpu_data();
@@ -81,7 +81,7 @@ void PermuteLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   if (need_permute_) {
     Dtype* top_diff = top[0]->mutable_gpu_diff<Dtype>();
     Dtype* bottom_diff = bottom[0]->mutable_gpu_diff<Dtype>();
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     const int* permute_order = permute_order_.gpu_data();
     const int* new_steps = new_steps_.gpu_data();
     const int* old_steps = old_steps_.gpu_data();

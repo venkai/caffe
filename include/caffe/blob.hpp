@@ -202,7 +202,7 @@ class Blob {
     return shape_.size();
   }
 
-  int count() const {
+  long count() const {
     return count_;
   }
 
@@ -222,13 +222,13 @@ class Blob {
    *
    * @param end_axis The first axis to exclude from the slice.
    */
-  int count(int start_axis, int end_axis) const {
+  long count(int start_axis, int end_axis) const {
     CHECK_LE(start_axis, end_axis);
     CHECK_GE(start_axis, 0);
     CHECK_GE(end_axis, 0);
     CHECK_LE(start_axis, num_axes());
     CHECK_LE(end_axis, num_axes());
-    int count = 1;
+    long count = 1;
     for (int i = start_axis; i < end_axis; ++i) {
       count *= shape(i);
     }
@@ -241,7 +241,7 @@ class Blob {
    *
    * @param start_axis The first axis to include in the slice.
    */
-  int count(int start_axis) const {
+  long count(int start_axis) const {
     return count(start_axis, num_axes());
   }
 
@@ -304,9 +304,9 @@ class Blob {
     return ((n * channels() + c) * height() + h) * width() + w;
   }
 
-  int offset(const vector<int>& indices) const {
+  long offset(const vector<int>& indices) const {
     CHECK_LE(indices.size(), num_axes());
-    int offset = 0;
+    long offset = 0;
     for (int i = 0; i < num_axes(); ++i) {
       offset *= shape(i);
       if ((int)indices.size() > i) {
@@ -567,7 +567,7 @@ class Blob {
   mutable shared_ptr<Tensor> diff_tensor_;
   shared_ptr<SyncedMemory> shape_data_;
   vector<int> shape_;
-  int count_;
+  long count_;
 
   bool is_current_data_valid() const {
     return data_tensor_->is_current_valid();
@@ -585,9 +585,9 @@ class Blob {
     diff_tensor_->convert(new_diff_type);
   }
 
-  static float at(int offset, Type dtype, const void* data);
-  static void cpu_axpy(int count, Type dtype, float alpha, const void* X, void* Y);
-  static void gpu_axpy(int count, Type dtype, float alpha, const void* X, void* Y);
+  static float at(long offset, Type dtype, const void* data);
+  static void cpu_axpy(long count, Type dtype, float alpha, const void* X, void* Y);
+  static void gpu_axpy(long count, Type dtype, float alpha, const void* X, void* Y);
 
   static void check_integrity(bool do_data, Type current_type, Type new_type) {
     CHECK_EQ(current_type, new_type)

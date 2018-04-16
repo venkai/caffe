@@ -40,7 +40,7 @@ void ScaleLayer<Ftype, Btype>::Forward_gpu(
   const Ftype* scale_data =
       (bottom.size() > 1 ? bottom[1] : this->blobs_[0].get())->template gpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   if (bias_layer_) {
     const Ftype* bias_data = this->blobs_[bias_param_id_]->template gpu_data<Ftype>();
@@ -122,7 +122,7 @@ void ScaleLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     }
   }
   if (propagate_down[0]) {
-    const int count = top[0]->count();
+    const long count = top[0]->count();
     const Btype* top_diff = top[0]->gpu_diff<Btype>();
     const Btype* scale_data = scale->gpu_data<Btype>();
     Btype* bottom_diff = bottom[0]->mutable_gpu_diff<Btype>();

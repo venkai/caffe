@@ -13,7 +13,7 @@
 namespace caffe {
 
 template <typename Dtype>
-__global__ void AxpyForward(const int count, const int spatial_dim,
+__global__ void AxpyForward(const long count, const int spatial_dim,
     const Dtype* scale_data, const Dtype* x_data, const Dtype* y_data,
     Dtype* out_data) {
   CUDA_KERNEL_LOOP(index, count) {
@@ -29,7 +29,7 @@ void AxpyLayer<Ftype, Btype>::Forward_gpu(
   const Ftype* x_data = bottom[1]->gpu_data<Ftype>();
   const Ftype* y_data = bottom[2]->gpu_data<Ftype>();
   Ftype* out_data = top[0]->mutable_gpu_data<Ftype>();
-  const int count = bottom[1]->count();
+  const long count = bottom[1]->count();
   cudaStream_t stream = Caffe::thread_stream();
   // NOLINT_NEXT_LINE(whitespace/operators)
   AxpyForward<Ftype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 0, stream>>>(
@@ -47,7 +47,7 @@ __global__ void AxpyBackwardScale(const int outer_num, const int spatial_dim,
   __syncthreads();
 
   for (int j = tid; j < spatial_dim; j += blockDim.x) {
-    int offset = blockIdx.x * spatial_dim + j;
+    long offset = blockIdx.x * spatial_dim + j;
     buffer[tid] += top_diff[offset] * x_data[offset];
   }
   __syncthreads();
@@ -65,7 +65,7 @@ __global__ void AxpyBackwardScale(const int outer_num, const int spatial_dim,
 }
 
 template <typename Dtype>
-__global__ void AxpyBackwardX(const int count, const int spatial_dim,
+__global__ void AxpyBackwardX(const long count, const int spatial_dim,
     const Dtype* scale_data, const Dtype* top_diff, Dtype* out) {
   CUDA_KERNEL_LOOP(index, count) {
     out[index] = scale_data[index / spatial_dim] * top_diff[index];
@@ -75,7 +75,7 @@ __global__ void AxpyBackwardX(const int count, const int spatial_dim,
 template <typename Ftype, typename Btype>
 void AxpyLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Btype* top_diff = top[0]->gpu_diff<Btype>();
   if (propagate_down[0]) {
     cudaStream_t stream = Caffe::thread_stream();

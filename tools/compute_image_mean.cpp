@@ -45,7 +45,7 @@ int main(int argc, char** argv) {
   unique_ptr<db::Cursor> cursor(db->NewCursor());
 
   BlobProto sum_blob;
-  int count = 0;
+  long count = 0;
   // load first datum
   Datum datum;
   cursor->parse(&datum);

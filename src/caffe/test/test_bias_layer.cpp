@@ -83,7 +83,7 @@ TYPED_TEST(BiasLayerTest, TestForwardEltwise) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_eltwise_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -103,7 +103,7 @@ TYPED_TEST(BiasLayerTest, TestForwardEltwiseInPlace) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_bottom_->cpu_data();
-  const int count = this->blob_bottom_->count();
+  const long count = this->blob_bottom_->count();
   const Dtype* in_data_a = orig_bottom.cpu_data();
   const Dtype* in_data_b = this->blob_bottom_eltwise_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -166,7 +166,7 @@ TYPED_TEST(BiasLayerTest, TestForwardEltwiseWithParam) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_->cpu_data();
   const Dtype* in_data_b = layer->blobs()[0]->template cpu_data<Dtype>();
   for (int i = 0; i < count; ++i) {
@@ -339,7 +339,7 @@ TYPED_TEST(BiasLayerTest, TestForwardBias) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data = this->blob_bottom_->cpu_data();
   const Dtype bias = *this->blob_bottom_bias_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -357,7 +357,7 @@ TYPED_TEST(BiasLayerTest, TestForwardBiasAxis2) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data = this->blob_bottom_->cpu_data();
   const Dtype bias = *this->blob_bottom_bias_->cpu_data();
   for (int i = 0; i < count; ++i) {

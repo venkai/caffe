@@ -78,7 +78,7 @@ void convert_dataset(const char* image_filename, const char* label_filename,
   // Storing to db
   char label;
   char* pixels = new char[rows * cols];
-  int count = 0;
+  long count = 0;
   string value;
 
   Datum datum;

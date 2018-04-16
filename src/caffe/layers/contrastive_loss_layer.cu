@@ -9,7 +9,7 @@ namespace caffe {
 template <typename Ftype, typename Btype>
 void ContrastiveLossLayer<Ftype, Btype>::Forward_gpu(
     const vector<Blob*>& bottom, const vector<Blob*>& top) {
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   caffe_gpu_sub<Ftype>(
       count,
       bottom[0]->gpu_data<Ftype>(),  // a
@@ -50,7 +50,7 @@ void ContrastiveLossLayer<Ftype, Btype>::Forward_gpu(
 }
 
 template <typename Dtype>
-__global__ void CLLBackward(const int count, const int channels,
+__global__ void CLLBackward(const long count, const int channels,
     const float margin, const bool legacy_version, const float alpha,
     const Dtype* y, const Dtype* diff, const Dtype* dist_sq,
     Dtype *bottom_diff) {
@@ -84,7 +84,7 @@ void ContrastiveLossLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   cudaStream_t stream = Caffe::thread_stream();
   for (int i = 0; i < 2; ++i) {
     if (propagate_down[i]) {
-      const int count = bottom[0]->count();
+      const long count = bottom[0]->count();
       const int channels = bottom[0]->channels();
       float margin = this->layer_param_.contrastive_loss_param().margin();
       const bool legacy_version =

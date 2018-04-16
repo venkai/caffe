@@ -1206,7 +1206,7 @@ void EncodeLocPrediction(const vector<LabelBBox>& all_loc_preds,
   const bool bp_inside = multibox_loss_param.bp_inside();
   const bool use_prior_for_matching =
       multibox_loss_param.use_prior_for_matching();
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < num; ++i) {
     for (map<int, vector<int> >::const_iterator
          it = all_match_indices[i].begin();
@@ -1313,7 +1313,7 @@ void ComputeLocLoss(const TBlob<Dtype>& loc_pred, const TBlob<Dtype>& loc_gt,
               diff.mutable_cpu_data());
     diff_data = diff.cpu_data();
   }
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < num; ++i) {
     vector<float> loc_loss(num_priors, 0.f);
     for (map<int, vector<int> >::const_iterator
@@ -1614,7 +1614,7 @@ void EncodeConfPrediction(const Dtype* conf_data, const int num,
   }
   do_neg_mining = mining_type != MultiBoxLossParameter_MiningType_NONE;
   const ConfLossType conf_loss_type = multibox_loss_param.conf_loss_type();
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < num; ++i) {
     if (all_gt_bboxes.find(i) != all_gt_bboxes.end()) {
       // Save matched (positive) bboxes scores and labels.

@@ -487,7 +487,7 @@ BOOST_PYTHON_MODULE(_caffe) {
         .add_property("channels", &Blob::channels)
         .add_property("height",   &Blob::height)
         .add_property("width",    &Blob::width)
-        .add_property("count",    static_cast<int (Blob::*)() const>(
+        .add_property("count",    static_cast<long (Blob::*)() const>(
             &Blob::count))
         .def("reshape",           bp::raw_function(&Blob_Reshape))
         .add_property("data",     bp::make_function(&Blob::mutable_cpu_data<Dtype>,

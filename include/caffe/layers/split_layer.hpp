@@ -33,7 +33,7 @@ class SplitLayer : public Layer<Ftype, Btype> {
       const vector<Blob*>& bottom) override;
   void Backward_gpu(const vector<Blob*>& top, const vector<bool>& propagate_down,
       const vector<Blob*>& bottom) override;
-  int count_;
+  long count_;
 };
 
 }  // namespace caffe

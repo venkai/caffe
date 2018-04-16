@@ -12,7 +12,7 @@ void TanHLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->cpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   for (int i = 0; i < count; ++i) {
     top_data[i] = tanh(bottom_data[i]);
   }
@@ -26,7 +26,7 @@ void TanHLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const Btype* top_data = top[0]->cpu_data<Btype>();
     const Btype* top_diff = top[0]->cpu_diff<Btype>();
     Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     float tanhx;
     for (int i = 0; i < count; ++i) {
       tanhx = top_data[i];

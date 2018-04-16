@@ -38,7 +38,7 @@ void SliceLayer<Ftype, Btype>::Reshape(const vector<Blob*>& bottom,
   const int bottom_slice_axis = bottom[0]->shape(slice_axis_);
   num_slices_ = bottom[0]->count(0, slice_axis_);
   slice_size_ = bottom[0]->count(slice_axis_ + 1);
-  int count = 0;
+  long count = 0;
   if (slice_point_.size() != 0) {
     CHECK_EQ(slice_point_.size(), top.size() - 1);
     CHECK_LE(top.size(), bottom_slice_axis);
@@ -76,7 +76,7 @@ template <typename Ftype, typename Btype>
 void SliceLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
       const vector<Blob*>& top) {
   if (top.size() == 1) { return; }
-  int offset_slice_axis = 0;
+  long offset_slice_axis = 0;
   const Ftype* bottom_data = bottom[0]->cpu_data<Ftype>();
   const int bottom_slice_axis = bottom[0]->shape(slice_axis_);
   for (int i = 0; i < top.size(); ++i) {
@@ -97,7 +97,7 @@ template <typename Ftype, typename Btype>
 void SliceLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
       const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   if (!propagate_down[0] || top.size() == 1) { return; }
-  int offset_slice_axis = 0;
+  long offset_slice_axis = 0;
   Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();
   const int bottom_slice_axis = bottom[0]->shape(slice_axis_);
   for (int i = 0; i < top.size(); ++i) {

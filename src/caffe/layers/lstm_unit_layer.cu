@@ -55,7 +55,7 @@ __global__ void LSTMUnitForward(const int nthreads, const int dim,
 template<typename Ftype, typename Btype>
 void LSTMUnitLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
                                               const vector<Blob*>& top) {
-  const int count = top[1]->count();
+  const long count = top[1]->count();
   const Ftype* C_prev = bottom[0]->gpu_data<Ftype>();
   const Ftype* X = bottom[1]->gpu_data<Ftype>();
   const Ftype* cont = bottom[2]->gpu_data<Ftype>();
@@ -131,7 +131,7 @@ void LSTMUnitLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   CHECK(!propagate_down[2]) << "Cannot backpropagate to sequence indicators.";
   if (!propagate_down[0] && !propagate_down[1]) { return; }
 
-  const int count = top[1]->count();
+  const long count = top[1]->count();
   const Btype* C_prev = bottom[0]->gpu_data<Btype>();
   const Btype* X_acts = X_acts_->gpu_data<Btype>();
   const Btype* cont = bottom[2]->gpu_data<Btype>();

@@ -293,7 +293,7 @@ void DetectionOutputLayer<Ftype, Btype>::Forward_cpu(
     top_data = top[0]->mutable_cpu_data<Ftype>();
   }
 
-  int count = 0;
+  long count = 0;
   boost::filesystem::path output_directory(output_directory_);
   for (int i = 0; i < num; ++i) {
     const map<int, vector<float> >& conf_scores = all_conf_scores[i];

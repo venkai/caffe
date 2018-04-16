@@ -160,7 +160,7 @@ template <typename Ftype, typename Btype>
 void PoolingLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
       const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
-  int count = top[0]->count();
+  long count = top[0]->count();
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;
   int* mask = NULL;
@@ -236,7 +236,7 @@ __global__ void MaxPoolBackward(const int nthreads, const Btype* top_diff,
          (w + pad_w < kernel_w) ? 0 : (w + pad_w - kernel_w) / stride_w + 1;
     const int pwend = min((w + pad_w) / stride_w + 1, pooled_width);
     float gradient = 0;
-    const int offset = (n * channels + c) * pooled_height * pooled_width;
+    const long offset = (n * channels + c) * pooled_height * pooled_width;
     const Btype* const top_diff_slice = top_diff + offset;
     if (mask) {
       const int* const mask_slice = mask + offset;
@@ -344,7 +344,7 @@ void PoolingLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   Btype* bottom_diff = bottom[0]->mutable_gpu_diff<Btype>();
   const Btype* top_data = top[0]->gpu_data<Btype>();
   const Btype* bottom_data = bottom[0]->gpu_data<Btype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   caffe_gpu_set<Btype>(count, Btype(0.), bottom_diff);
   // We'll output the mask to top[1] if it's of size >1.
   const bool use_top_mask = top.size() > 1;

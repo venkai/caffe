@@ -152,7 +152,7 @@ void NormalizeLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
   Dtype* buffer_spatial = buffer_spatial_.mutable_gpu_data();
   const Dtype* sum_channel_multiplier = sum_channel_multiplier_.gpu_data();
   const Dtype* sum_spatial_multiplier = sum_spatial_multiplier_.gpu_data();
-  int count = top[0]->count();
+  long count = top[0]->count();
   int num = top[0]->num();
   int dim = count / num;
   int spatial_dim = top[0]->height() * top[0]->width();

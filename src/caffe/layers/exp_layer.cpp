@@ -30,7 +30,7 @@ void ExpLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom,
 template <typename Ftype, typename Btype>
 void ExpLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   const Ftype* bottom_data = bottom[0]->cpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
   if (inner_scale_ == 1.F) {
@@ -48,7 +48,7 @@ template <typename Ftype, typename Btype>
 void ExpLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   if (!propagate_down[0]) { return; }
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   const Btype* top_data = top[0]->cpu_data<Btype>();
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
   Btype* bottom_diff = bottom[0]->mutable_cpu_diff<Btype>();

@@ -28,7 +28,7 @@ TYPED_TEST_CASE(ConstantFillerTest, TestDtypes);
 
 TYPED_TEST(ConstantFillerTest, TestFill) {
   EXPECT_TRUE(this->blob_);
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const TypeParam* data = this->blob_->cpu_data();
   for (int i = 0; i < count; ++i) {
     EXPECT_GE(data[i], this->filler_param_.value());
@@ -56,7 +56,7 @@ TYPED_TEST_CASE(UniformFillerTest, TestDtypes);
 
 TYPED_TEST(UniformFillerTest, TestFill) {
   EXPECT_TRUE(this->blob_);
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const TypeParam* data = this->blob_->cpu_data();
   for (int i = 0; i < count; ++i) {
     EXPECT_GE(data[i], this->filler_param_.min());
@@ -84,7 +84,7 @@ TYPED_TEST_CASE(UniformStaticFillerTest, TestDtypes);
 
 TYPED_TEST(UniformStaticFillerTest, TestFill) {
   EXPECT_TRUE((bool)this->blob_);
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const TypeParam* data = this->blob_->cpu_data();
   // We want to check that repeated calls to the static filler returns the same
   // values. So we copy the first filler call to data_0 and the second one to
@@ -128,7 +128,7 @@ TYPED_TEST_CASE(PositiveUnitballFillerTest, TestDtypes);
 TYPED_TEST(PositiveUnitballFillerTest, TestFill) {
   EXPECT_TRUE(this->blob_);
   const int num = this->blob_->num();
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const int dim = count / num;
   const TypeParam* data = this->blob_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -163,7 +163,7 @@ TYPED_TEST_CASE(PositiveUnitballStaticFillerTest, TestDtypes);
 TYPED_TEST(PositiveUnitballStaticFillerTest, TestFill) {
   EXPECT_TRUE((bool)this->blob_);
   const int num = this->blob_->num();
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const int dim = count / num;
   const TypeParam* data = this->blob_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -216,7 +216,7 @@ TYPED_TEST_CASE(GaussianFillerTest, TestDtypes);
 
 TYPED_TEST(GaussianFillerTest, TestFill) {
   EXPECT_TRUE(this->blob_);
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const TypeParam* data = this->blob_->cpu_data();
   TypeParam mean = 0.;
   TypeParam var = 0.;
@@ -256,7 +256,7 @@ TYPED_TEST_CASE(GaussianStaticFillerTest, TestDtypes);
 
 TYPED_TEST(GaussianStaticFillerTest, TestFill) {
   EXPECT_TRUE((bool)this->blob_);
-  const int count = this->blob_->count();
+  const long count = this->blob_->count();
   const TypeParam* data = this->blob_->cpu_data();
   TypeParam mean = 0.;
   TypeParam var = 0.;
@@ -304,7 +304,7 @@ class XavierFillerTest : public ::testing::Test {
     this->filler_.reset(new XavierFiller<Dtype>(this->filler_param_));
     this->filler_->Fill(blob_);
     EXPECT_TRUE(this->blob_);
-    const int count = this->blob_->count();
+    const long count = this->blob_->count();
     const Dtype* data = this->blob_->cpu_data();
     Dtype mean = 0.;
     Dtype ex2 = 0.;
@@ -353,7 +353,7 @@ class XavierStaticFillerTest : public ::testing::Test {
     this->filler_.reset(new XavierStaticFiller<Dtype>(this->filler_param_));
     EXPECT_TRUE((bool)this->blob_);
     this->filler_->Fill(blob_.get());
-    const int count = this->blob_->count();
+    const long count = this->blob_->count();
     const Dtype* data = this->blob_->cpu_data();
     Dtype mean = 0.;
     Dtype ex2 = 0.;
@@ -418,7 +418,7 @@ class MSRAFillerTest : public ::testing::Test {
     this->filler_.reset(new MSRAFiller<Dtype>(this->filler_param_));
     this->filler_->Fill(blob_);
     EXPECT_TRUE(this->blob_);
-    const int count = this->blob_->count();
+    const long count = this->blob_->count();
     const Dtype* data = this->blob_->cpu_data();
     Dtype mean = 0.;
     Dtype ex2 = 0.;
@@ -467,7 +467,7 @@ class MSRAStaticFillerTest : public ::testing::Test {
     this->filler_.reset(new MSRAStaticFiller<Dtype>(this->filler_param_));
     this->filler_->Fill(blob_.get());
     EXPECT_TRUE(this->blob_.get());
-    const int count = this->blob_->count();
+    const long count = this->blob_->count();
     const Dtype* data = this->blob_->cpu_data();
     Dtype mean = 0.;
     Dtype ex2 = 0.;

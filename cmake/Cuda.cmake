@@ -14,7 +14,7 @@ function(caffe_detect_installed_gpus out_variable)
       "#include <cstdio>\n"
       "int main()\n"
       "{\n"
-      "  int count = 0;\n"
+      "  long count = 0;\n"
       "  if (cudaSuccess != cudaGetDeviceCount(&count)) return -1;\n"
       "  if (count == 0) return -1;\n"
       "  for (int device = 0; device < count; ++device)\n"

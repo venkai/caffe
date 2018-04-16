@@ -118,7 +118,7 @@ void GradientChecker<Dtype>::CheckGradientSingle(LayerBase* layer, const vector<
     Blob* current_blob = blobs_to_check[blob_id];
     computed_gradient_blobs[blob_id].reset(new TBlob<Dtype>());
     computed_gradient_blobs[blob_id]->ReshapeLike(*current_blob);
-    const int count = blobs_to_check[blob_id]->count();
+    const long count = blobs_to_check[blob_id]->count();
     const Dtype* diff = blobs_to_check[blob_id]->cpu_diff<Dtype>();
     Dtype* computed_gradients = computed_gradient_blobs[blob_id]->mutable_cpu_data();
     caffe_copy(count, diff, computed_gradients);
@@ -249,7 +249,7 @@ float GradientChecker<Dtype>::GetObjAndGradient(const LayerBase& layer, const ve
         Blob* top_blob = top[i];
         const double* top_blob_data = top_blob->cpu_data<double>();
         double* top_blob_diff = top_blob->mutable_cpu_diff<double>();
-        int count = top_blob->count();
+        long count = top_blob->count();
         for (int j = 0; j < count; ++j) {
           loss += top_blob_data[j] * top_blob_data[j];
         }
@@ -277,7 +277,7 @@ float GradientChecker<Dtype>::GetObjAndGradient(const LayerBase& layer, const ve
       Blob* top_blob = top[i];
       const float* top_blob_data = top_blob->cpu_data<float>();
       float* top_blob_diff = top_blob->mutable_cpu_diff<float>();
-      int count = top_blob->count();
+      long count = top_blob->count();
       for (int j = 0; j < count; ++j) {
         loss += top_blob_data[j] * top_blob_data[j];
       }

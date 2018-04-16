@@ -98,7 +98,7 @@ int main(int argc, char** argv) {
   // Storing to db
   std::string root_folder(argv[1]);
   Datum datum;
-  int count = 0;
+  long count = 0;
   int data_size = 0;
   bool data_size_initialized = false;
 

@@ -31,7 +31,7 @@ __global__ void SmoothL1Forward(const int n, const Dtype* in, Dtype* out) {
 template <typename Ftype, typename Btype>
 void SmoothL1LossLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   caffe_gpu_sub(
       count,
       bottom[0]->gpu_data<Dtype>(),
@@ -74,7 +74,7 @@ __global__ void SmoothL1Backward(const int n, const Dtype* in, Dtype* out) {
 template <typename Ftype, typename Btype>
 void SmoothL1LossLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  int count = diff_.count();
+  long count = diff_.count();
   cudaStream_t stream = Caffe::thread_stream();
   // NOLINT_NEXT_LINE(whitespace/operators)
   SmoothL1Backward<Dtype><<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 0, stream>>>(

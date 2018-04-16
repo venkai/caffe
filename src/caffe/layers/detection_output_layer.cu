@@ -127,7 +127,7 @@ void DetectionOutputLayer<Ftype, Btype>::Forward_gpu(
     top_data = top[0]->mutable_cpu_data<Ftype>();
   }
 
-  int count = 0;
+  long count = 0;
   boost::filesystem::path output_directory(output_directory_);
   for (int i = 0; i < num; ++i) {
     const int conf_idx = i * num_classes_ * num_priors_;

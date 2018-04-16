@@ -43,7 +43,7 @@ class SigmoidCrossEntropyLossLayerTest : public MultiDeviceTest<TypeParam> {
     delete blob_top_loss_;
   }
 
-  Dtype SigmoidCrossEntropyLossReference(const int count, const int num,
+  Dtype SigmoidCrossEntropyLossReference(const long count, const int num,
                                          const Dtype* input,
                                          const Dtype* target) {
     float loss = 0;
@@ -80,7 +80,7 @@ class SigmoidCrossEntropyLossLayerTest : public MultiDeviceTest<TypeParam> {
       layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
       Dtype layer_loss =
           layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
-      const int count = this->blob_bottom_data_->count();
+      const long count = this->blob_bottom_data_->count();
       const int num = this->blob_bottom_data_->num();
       const Dtype* blob_bottom_data = this->blob_bottom_data_->cpu_data();
       const Dtype* blob_bottom_targets =

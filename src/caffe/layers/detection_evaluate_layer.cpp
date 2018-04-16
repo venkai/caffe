@@ -102,7 +102,7 @@ void DetectionEvaluateLayer<Ftype, Btype>::Forward_cpu(
        it != all_gt_bboxes.end(); ++it) {
     for (LabelBBox::iterator iit = it->second.begin(); iit != it->second.end();
          ++iit) {
-      int count = 0;
+      long count = 0;
       if (evaluate_difficult_gt_) {
         count = iit->second.size();
       } else {

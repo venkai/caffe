@@ -35,7 +35,7 @@ class ConstantFiller : public Filler<Dtype> {
   explicit ConstantFiller(const FillerParameter& param)
       : Filler<Dtype>(param) {}
   virtual void Fill(Blob* blob) {
-    const int count = blob->count();
+    const long count = blob->count();
     const Dtype value = this->filler_param_.value();
     CHECK(count);
     for (int i = 0; i < count; ++i) {

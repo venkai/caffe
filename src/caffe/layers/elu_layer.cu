@@ -19,7 +19,7 @@ void ELULayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
-  const int count = bottom[0]->count();
+  const long count = bottom[0]->count();
   float alpha = this->layer_param_.elu_param().alpha();
   float lambda = this->layer_param_.elu_param().lambda();
   // NOLINT_NEXT_LINE(whitespace/operators)
@@ -47,7 +47,7 @@ void ELULayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     const Btype* top_diff = top[0]->gpu_diff<Btype>();
     const Btype* top_data = top[0]->gpu_data<Btype>();
     Btype* bottom_diff = bottom[0]->mutable_gpu_diff<Btype>();
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     float alpha = this->layer_param_.elu_param().alpha();
     float lambda = this->layer_param_.elu_param().lambda();
     // NOLINT_NEXT_LINE(whitespace/operators)

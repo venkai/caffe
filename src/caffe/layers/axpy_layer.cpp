@@ -50,7 +50,7 @@ void AxpyLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
 template <typename Ftype, typename Btype>
 void AxpyLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
   if (propagate_down[0]) {
     int spatial_dim = bottom[1]->count(2);

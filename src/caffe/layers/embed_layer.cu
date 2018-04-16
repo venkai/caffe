@@ -37,7 +37,7 @@ void EmbedLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
   const Ftype* weight = this->blobs_[0]->template gpu_data<Ftype>();
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   cudaStream_t stream = Caffe::thread_stream();
   EmbedForward  // NOLINT_NEXT_LINE(whitespace/operators)
       <<<CAFFE_GET_BLOCKS(count), CAFFE_CUDA_NUM_THREADS, 0, stream>>>(

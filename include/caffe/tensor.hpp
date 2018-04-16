@@ -24,11 +24,11 @@ class Tensor {
 
   std::string to_string(int indent) const;
 
-  static void copy_helper(bool use_gpu, int count, const void* p_src, Type src_type,
+  static void copy_helper(bool use_gpu, long count, const void* p_src, Type src_type,
       void* p_dst, Type dst_type);  // NOLINT(runtime/references)
-  static void gpu_scal(int count, Type dtype, void* data, float scal,
+  static void gpu_scal(long count, Type dtype, void* data, float scal,
       cublasHandle_t cublas_handle);
-  static void cpu_scal(int count, Type dtype, void* data, float scal);
+  static void cpu_scal(long count, Type dtype, void* data, float scal);
 
  private:
   Type type() const {
@@ -43,7 +43,7 @@ class Tensor {
   void scale(float new_scale, void* handle = nullptr);
   void invalidate_others();
   void convert(Type new_type);
-  void Reshape(int count);
+  void Reshape(long count);
   float asum(int group) const;
   float amax(int group) const;
   float sumsq(int group) const;
@@ -87,7 +87,7 @@ class Tensor {
   // array of projections to different types (including current type_)
   shared_ptr<vector<shared_ptr<SyncedMemory>>> synced_arrays_;
   // number of entries - comes from Blob via Reshape
-  int count_;
+  long count_;
 
   DISABLE_COPY_MOVE_AND_ASSIGN(Tensor);
 };  // class Tensor

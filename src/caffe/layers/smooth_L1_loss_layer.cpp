@@ -41,7 +41,7 @@ void SmoothL1LossLayer<Ftype, Btype>::Reshape(
 template <typename Ftype, typename Btype>
 void SmoothL1LossLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   caffe_sub(
       count,
       bottom[0]->cpu_data<Dtype>(),
@@ -72,7 +72,7 @@ void SmoothL1LossLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
 template <typename Ftype, typename Btype>
 void SmoothL1LossLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  int count = diff_.count();
+  long count = diff_.count();
   Dtype* diff_data = diff_.mutable_cpu_data();
   for (int i = 0; i < count; ++i) {
     Dtype val = diff_data[i];

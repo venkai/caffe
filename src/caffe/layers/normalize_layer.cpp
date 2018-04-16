@@ -147,7 +147,7 @@ void NormalizeLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
   Dtype* buffer_spatial = buffer_spatial_.mutable_cpu_data();
   const Dtype* sum_channel_multiplier = sum_channel_multiplier_.cpu_data();
   const Dtype* sum_spatial_multiplier = sum_spatial_multiplier_.cpu_data();
-  int count = top[0]->count();
+  long count = top[0]->count();
   int num = top[0]->num();
   int dim = count / num;
   int spatial_dim = top[0]->height() * top[0]->width();

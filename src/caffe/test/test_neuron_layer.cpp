@@ -76,7 +76,7 @@ class NeuronLayerTest : public MultiDeviceTest<TypeParam> {
     const Dtype* bottom_data = this->blob_bottom_->cpu_data();
     const Dtype* top_data = this->blob_top_->cpu_data();
     float scale = 1. / (1. - layer_param.dropout_param().dropout_ratio());
-    const int count = this->blob_bottom_->count();
+    const long count = this->blob_bottom_->count();
     // Initialize num_kept to count the number of inputs NOT dropped out.
     int num_kept = 0;
     for (int i = 0; i < count; ++i) {
@@ -197,7 +197,7 @@ TYPED_TEST(NeuronLayerTest, TestAbsVal) {
   layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* bottom_data = this->blob_bottom_->cpu_data();
   const Dtype* top_data = this->blob_top_->cpu_data();
-  const int count = this->blob_bottom_->count();
+  const long count = this->blob_bottom_->count();
   for (int i = 0; i < count; ++i) {
     EXPECT_EQ(top_data[i], fabs(bottom_data[i]));
   }
@@ -631,7 +631,7 @@ TYPED_TEST(NeuronLayerTest, TestPReLUParam) {
   PReLULayer<Dtype, Dtype> layer(layer_param);
   layer.SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* slopes = layer.blobs()[0]->template cpu_data<Dtype>();
-  int count = layer.blobs()[0]->count();
+  long count = layer.blobs()[0]->count();
   for (int i = 0; i < count; ++i, ++slopes) {
     EXPECT_EQ(*slopes, 0.25);
   }
@@ -830,7 +830,7 @@ class CuDNNNeuronLayerTest : public GPUDeviceTest<Dtype> {
     const Dtype* bottom_data = this->blob_bottom_->cpu_data();
     const Dtype* top_data = this->blob_top_->cpu_data();
     float scale = 1.F / (1.F - layer_param.dropout_param().dropout_ratio());
-    const int count = this->blob_bottom_->count();
+    const long count = this->blob_bottom_->count();
     // Initialize num_kept to count the number of inputs NOT dropped out.
     int num_kept = 0;
     for (int i = 0; i < count; ++i) {

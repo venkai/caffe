@@ -92,7 +92,7 @@ inline void im2col_nd_core_cpu(const Dtype* data_input, const bool im2col,
   vector<int> d_iter(num_spatial_axes, 0);
   for (int c_col = 0; c_col < channels_col; ++c_col) {
     // Loop over spatial axes in reverse order to compute a per-axis offset.
-    int offset = c_col;
+    long offset = c_col;
     for (int d_i = num_spatial_axes - 1; d_i >= 0; --d_i) {
       if (d_i < num_spatial_axes - 1) {
         offset /= kernel_shape[d_i + 1];

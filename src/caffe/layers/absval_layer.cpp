@@ -16,7 +16,7 @@ void AbsValLayer<Ftype, Btype>::LayerSetUp(const vector<Blob*>& bottom,
 template <typename Ftype, typename Btype>
 void AbsValLayer<Ftype, Btype>::Forward_cpu(
     const vector<Blob*>& bottom, const vector<Blob*>& top) {
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
   caffe_abs(count, bottom[0]->cpu_data<Ftype>(), top_data);
 }
@@ -24,7 +24,7 @@ void AbsValLayer<Ftype, Btype>::Forward_cpu(
 template <typename Ftype, typename Btype>
 void AbsValLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
   if (propagate_down[0]) {
     const Btype* bottom_data = bottom[0]->cpu_data<Btype>();

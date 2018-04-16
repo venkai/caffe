@@ -43,7 +43,7 @@ void Blob::Reshape(const vector<int>& shape) {
   for (int i = 0; i < shape.size(); ++i) {
     CHECK_GE(shape[i], 0);
     if (count_ != 0) {
-      CHECK_LE(shape[i], INT_MAX / count_) << "blob size exceeds INT_MAX";
+      CHECK_LE(shape[i], LONG_MAX / count_) << "blob size exceeds LONG_MAX";
     }
     count_ *= shape[i];
     shape_[i] = shape[i];
@@ -117,7 +117,7 @@ void Blob::Update() {
   CHECK(is_current_diff_valid());
 }
 
-float Blob::at(int offset, Type dtype, const void* data) {
+float Blob::at(long offset, Type dtype, const void* data) {
   if (is_type<float>(dtype)) {
     return static_cast<const float*>(data)[offset];
   } else if (is_type<float16>(dtype)) {
@@ -129,7 +129,7 @@ float Blob::at(int offset, Type dtype, const void* data) {
   return 0.F;
 }
 
-void Blob::cpu_axpy(int count, Type dtype, float alpha, const void* X, void* Y) {
+void Blob::cpu_axpy(long count, Type dtype, float alpha, const void* X, void* Y) {
   if (is_type<float>(dtype)) {
     caffe_axpy(count, alpha, static_cast<const float*>(X),
         static_cast<float*>(Y));
@@ -144,7 +144,7 @@ void Blob::cpu_axpy(int count, Type dtype, float alpha, const void* X, void* Y) 
   }
 }
 
-void Blob::gpu_axpy(int count, Type dtype, float alpha, const void* X, void* Y) {
+void Blob::gpu_axpy(long count, Type dtype, float alpha, const void* X, void* Y) {
   if (is_type<float>(dtype)) {
     caffe_gpu_axpy(count, alpha, static_cast<const float*>(X),
         static_cast<float*>(Y));

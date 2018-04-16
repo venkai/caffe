@@ -74,7 +74,7 @@ void hdf5_load_nd_dataset(hid_t file_id, const char* dataset_name_,
     status = H5LTread_dataset_double(
         file_id, dataset_name_, blob->mutable_cpu_data<double>());
   } else if (is_type<float16>(blob->data_type())) {
-    const int count = blob->count();
+    const long count = blob->count();
     std::vector<float> buf(count);
     status = H5LTread_dataset_float(file_id, dataset_name_,
         &buf.front());
@@ -113,7 +113,7 @@ void hdf5_save_nd_dataset(hid_t file_id, const string& dataset_name,
   } else if (is_type<float16>(blob.data_type())) {
     const float16* data = write_diff ?
         blob.cpu_diff<float16>() : blob.cpu_data<float16>();
-    const int count = blob.count();
+    const long count = blob.count();
     LOG(INFO) << "Converting " << count << " float16 values to float";
     std::vector<float> buf(count);
     caffe_cpu_convert(count, data, &buf.front());

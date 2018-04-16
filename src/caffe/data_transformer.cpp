@@ -400,7 +400,7 @@ void DataTransformer<Dtype>::Transform(const vector<Datum>& datum_vector,
     << "The size of datum_vector must be no greater than transformed_blob->num()";
   TBlob<Dtype> uni_blob(1, channels, height, width);
   for (int item_id = 0; item_id < datum_num; ++item_id) {
-    int offset = transformed_blob->offset(item_id);
+    long offset = transformed_blob->offset(item_id);
     uni_blob.set_cpu_data(transformed_blob->mutable_cpu_data() + offset);
     Transform(datum_vector[item_id], &uni_blob);
   }

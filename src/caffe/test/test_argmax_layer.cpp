@@ -176,7 +176,7 @@ TYPED_TEST(ArgMaxLayerTest, TestCPUTopK) {
     for (int j = 0; j < this->top_k_; ++j) {
       max_ind = static_cast<int>(this->blob_top_->data_at(i, 0, j, 0));
       max_val = bottom_data[i * dim + max_ind];
-      int count = 0;
+      long count = 0;
       for (int k = 0; k < dim; ++k) {
         if (bottom_data[i * dim + k] > max_val) {
           ++count;
@@ -219,7 +219,7 @@ TYPED_TEST(ArgMaxLayerTest, TestCPUMaxValTopK) {
 //      EXPECT_EQ(bottom_data[i * dim + max_ind], max_val);
       ++total_checks;
       if (bottom_data[i * dim + max_ind] != max_val) ++total_failures;
-      int count = 0;
+      long count = 0;
       for (int k = 0; k < dim; ++k) {
         if (bottom_data[i * dim + k] > max_val) {
           ++count;
@@ -282,7 +282,7 @@ TYPED_TEST(ArgMaxLayerTest, TestCPUAxisTopK) {
           max_val = this->blob_bottom_->data_at(i, j, max_ind, k);
           EXPECT_GE(max_ind, 0);
           EXPECT_LE(max_ind, shape[2]);
-          int count = 0;
+          long count = 0;
           for (int l = 0; l < shape[2]; ++l) {
             if (this->blob_bottom_->data_at(i, j, l, k) > max_val) {
               ++count;
@@ -320,7 +320,7 @@ TYPED_TEST(ArgMaxLayerTest, TestCPUAxisMaxValTopK) {
       for (int k = 0; k < shape[2]; ++k) {
         for (int m = 0; m < this->top_k_; ++m) {
           max_val = this->blob_top_->data_at(i, j, k, m);
-          int count = 0;
+          long count = 0;
           for (int l = 0; l < shape[3]; ++l) {
             if (this->blob_bottom_->data_at(i, j, k, l) > max_val) {
               ++count;

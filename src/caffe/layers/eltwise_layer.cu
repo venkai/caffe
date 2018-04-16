@@ -34,7 +34,7 @@ template <typename Ftype, typename Btype>
 void EltwiseLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
   int* mask = nullptr;
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   //  convert to Ftype
   Ftype* top_data = top[0]->mutable_gpu_data<Ftype>();
 
@@ -99,7 +99,7 @@ template <typename Ftype, typename Btype>
 void EltwiseLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   const int* mask = nullptr;
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Btype* top_data = top[0]->gpu_data<Btype>();
   const Btype* top_diff = top[0]->gpu_diff<Btype>();
   for (int i = 0; i < bottom.size(); ++i) {

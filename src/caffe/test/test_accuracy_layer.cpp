@@ -192,7 +192,7 @@ TYPED_TEST(AccuracyLayerTest, TestForwardIgnoreLabel) {
   TypeParam max_value;
   int max_id;
   int num_correct_labels = 0;
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < 100; ++i) {
     if (kIgnoreLabelValue == this->blob_bottom_label_->data_at(i, 0, 0, 0)) {
       continue;
@@ -305,7 +305,7 @@ TYPED_TEST(AccuracyLayerTest, TestForwardCPUPerClassWithIgnoreLabel) {
   const int num_class = this->blob_top_per_class_->num();
   vector<int> correct_per_class(num_class, 0);
   vector<int> num_per_class(num_class, 0);
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < 100; ++i) {
     if (kIgnoreLabelValue == this->blob_bottom_label_->data_at(i, 0, 0, 0)) {
       continue;

@@ -277,7 +277,7 @@ __global__ void kernel_channel_max(const int num, const int channels,
 }
 
 template <typename Dtype>
-__global__ void kernel_channel_subtract(const int count,
+__global__ void kernel_channel_subtract(const long count,
     const int num, const int channels,
     const int spatial_dim, const Dtype* channel_data, const Dtype* channel_max,
     Dtype* data) {
@@ -289,7 +289,7 @@ __global__ void kernel_channel_subtract(const int count,
 }
 
 template <typename Dtype>
-__global__ void kernel_exp(const int count, const Dtype* data, Dtype* out) {
+__global__ void kernel_exp(const long count, const Dtype* data, Dtype* out) {
   CUDA_KERNEL_LOOP(index, count) {
     out[index] = exp(data[index]);
   }
@@ -310,7 +310,7 @@ __global__ void kernel_channel_sum(const int num, const int channels,
 }
 
 template <typename Dtype>
-__global__ void kernel_channel_div(const int count,
+__global__ void kernel_channel_div(const long count,
     const int num, const int channels,
     const int spatial_dim, const Dtype* channel_sum, Dtype* data) {
   CUDA_KERNEL_LOOP(index, count) {
@@ -329,7 +329,7 @@ void SoftMaxGPU(const Dtype* data, const int outer_num,
   shape[2] = inner_num;
   TBlob<Dtype> scale(shape);
   Dtype* scale_data = scale.mutable_gpu_data();
-  int count = outer_num * channels * inner_num;
+  long count = outer_num * channels * inner_num;
   cudaStream_t stream = Caffe::thread_stream();
   // We need to subtract the max to avoid numerical issues, compute the exp,
   // and then normalize.

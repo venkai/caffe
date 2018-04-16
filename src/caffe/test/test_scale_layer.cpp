@@ -79,7 +79,7 @@ TYPED_TEST(ScaleLayerTest, TestForwardEltwise) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_->cpu_data();
   const Dtype* in_data_b = this->blob_bottom_eltwise_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -99,7 +99,7 @@ TYPED_TEST(ScaleLayerTest, TestForwardEltwiseInPlace) {
   layer->SetUp(this->blob_bottom_vec_, this->blob_top_vec_);
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_bottom_->cpu_data();
-  const int count = this->blob_bottom_->count();
+  const long count = this->blob_bottom_->count();
   const Dtype* in_data_a = orig_bottom.cpu_data();
   const Dtype* in_data_b = this->blob_bottom_eltwise_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -166,7 +166,7 @@ TYPED_TEST(ScaleLayerTest, TestForwardEltwiseWithParam) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data_a = this->blob_bottom_->cpu_data();
   const Dtype* in_data_b = layer->blobs()[0]->template cpu_data<Dtype>();
   for (int i = 0; i < count; ++i) {
@@ -377,7 +377,7 @@ TYPED_TEST(ScaleLayerTest, TestForwardScale) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data = this->blob_bottom_->cpu_data();
   const Dtype scale = *this->blob_bottom_scale_->cpu_data();
   for (int i = 0; i < count; ++i) {
@@ -395,7 +395,7 @@ TYPED_TEST(ScaleLayerTest, TestForwardScaleAxis2) {
   ASSERT_EQ(this->blob_bottom_->shape(), this->blob_top_->shape());
   layer->Forward(this->blob_bottom_vec_, this->blob_top_vec_);
   const Dtype* data = this->blob_top_->cpu_data();
-  const int count = this->blob_top_->count();
+  const long count = this->blob_top_->count();
   const Dtype* in_data = this->blob_bottom_->cpu_data();
   const Dtype scale = *this->blob_bottom_scale_->cpu_data();
   for (int i = 0; i < count; ++i) {

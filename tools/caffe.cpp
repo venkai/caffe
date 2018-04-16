@@ -92,7 +92,7 @@ static BrewFunction GetBrewFunction(const caffe::string& name) {
 // Parse GPU ids or use all available devices
 static void get_gpus(vector<int>* gpus) {
   if (FLAGS_gpu == "all") {
-    const int count = Caffe::device_count();
+    const long count = Caffe::device_count();
     for (int i = 0; i < count; ++i) {
       gpus->push_back(i);
     }

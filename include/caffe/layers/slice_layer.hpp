@@ -39,7 +39,7 @@ class SliceLayer : public Layer<Ftype, Btype> {
   virtual void Backward_gpu(const vector<Blob*>& top,
       const vector<bool>& propagate_down, const vector<Blob*>& bottom);
 
-  int count_;
+  long count_;
   int num_slices_;
   int slice_size_;
   int slice_axis_;

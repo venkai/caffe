@@ -54,7 +54,7 @@ void EltwiseLayer<Ftype, Btype>::Forward_cpu(
   int* mask = nullptr;
   const Ftype* bottom_data_a = nullptr;
   const Ftype* bottom_data_b = nullptr;
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   Ftype* top_data = top[0]->mutable_cpu_data<Ftype>();
   switch (op_) {
   case EltwiseParameter_EltwiseOp_PROD:
@@ -107,7 +107,7 @@ template <typename Ftype, typename Btype>
 void EltwiseLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   const int* mask = nullptr;
-  const int count = top[0]->count();
+  const long count = top[0]->count();
   const Btype* top_data = top[0]->cpu_data<Btype>();
   const Btype* top_diff = top[0]->cpu_diff<Btype>();
   for (int i = 0; i < bottom.size(); ++i) {

@@ -137,7 +137,7 @@ int main(int argc, char** argv) {
   std::string root_folder(argv[1]);
   AnnotatedDatum anno_datum;
   Datum* datum = anno_datum.mutable_datum();
-  int count = 0;
+  long count = 0;
   int data_size = 0;
   bool data_size_initialized = false;
 

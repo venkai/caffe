@@ -146,7 +146,7 @@ TYPED_TEST(MemoryDataLayerTest, AddDatumVectorDefaultTransform) {
   int data_index;
   // Go through the data 5 times
   for (int iter = 0; iter < num_iter; ++iter) {
-    int offset = this->batch_size_ * iter;
+    long offset = this->batch_size_ * iter;
     layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
     const Dtype* data = this->data_blob_->cpu_data();
     size_t index = 0;
@@ -192,7 +192,7 @@ TYPED_TEST(MemoryDataLayerTest, AddMatVectorDefaultTransform) {
   int data_index;
   const size_t count = this->channels_ * this->height_ * this->width_;
   for (int iter = 0; iter < num_iter; ++iter) {
-    int offset = this->batch_size_ * iter;
+    long offset = this->batch_size_ * iter;
     layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
     const Dtype* data = this->data_blob_->cpu_data();
     for (int i = 0; i < this->batch_size_; ++i) {
@@ -237,7 +237,7 @@ TYPED_TEST(MemoryDataLayerTest, TestSetBatchSize) {
   int data_index;
   const size_t count = this->channels_ * this->height_ * this->width_;
   for (int iter = 0; iter < num_iter; ++iter) {
-    int offset = this->batch_size_ * iter;
+    long offset = this->batch_size_ * iter;
     layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
     const Dtype* data = this->data_blob_->cpu_data();
     for (int i = 0; i < this->batch_size_; ++i) {
@@ -271,7 +271,7 @@ TYPED_TEST(MemoryDataLayerTest, TestSetBatchSize) {
 
   // finally consume new data and check if everything is fine
   for (int iter = 0; iter < num_iter; ++iter) {
-    int offset = new_batch_size * iter;
+    long offset = new_batch_size * iter;
     layer.Forward(this->blob_bottom_vec_, this->blob_top_vec_);
     EXPECT_EQ(new_batch_size, this->blob_top_vec_[0]->num());
     EXPECT_EQ(new_batch_size, this->blob_top_vec_[1]->num());

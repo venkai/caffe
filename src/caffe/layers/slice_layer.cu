@@ -9,7 +9,7 @@ template <typename Dtype>
 __global__ void Slice(const int nthreads, const Dtype* in_data,
     const bool forward, const int num_slices, const int slice_size,
     const int bottom_slice_axis, const int top_slice_axis,
-    const int offset_slice_axis, Dtype* out_data) {
+    const long offset_slice_axis, Dtype* out_data) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     const int total_slice_size = slice_size * top_slice_axis;
     const int slice_num = index / total_slice_size;
@@ -28,7 +28,7 @@ template <typename Ftype, typename Btype>
 void SliceLayer<Ftype, Btype>::Forward_gpu(const vector<Blob*>& bottom,
         const vector<Blob*>& top) {
   if (top.size() == 1) { return; }
-  int offset_slice_axis = 0;
+  long offset_slice_axis = 0;
   const Ftype* bottom_data = bottom[0]->gpu_data<Ftype>();
   const int bottom_slice_axis = bottom[0]->shape(slice_axis_);
   const bool kForward = true;
@@ -51,7 +51,7 @@ template <typename Ftype, typename Btype>
 void SliceLayer<Ftype, Btype>::Backward_gpu(const vector<Blob*>& top,
       const vector<bool>& propagate_down, const vector<Blob*>& bottom) {
   if (!propagate_down[0] || top.size() == 1) { return; }
-  int offset_slice_axis = 0;
+  long offset_slice_axis = 0;
   Btype* bottom_diff = bottom[0]->mutable_gpu_diff<Btype>();
   const int bottom_slice_axis = bottom[0]->shape(slice_axis_);
   const bool kForward = false;

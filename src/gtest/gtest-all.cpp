@@ -670,7 +670,7 @@ template <class Container, typename Predicate>
 inline int CountIf(const Container& c, Predicate predicate) {
   // Implemented as an explicit loop since std::count_if() in libCstd on
   // Solaris has a non-standard signature.
-  int count = 0;
+  long count = 0;
   for (typename Container::const_iterator it = c.begin(); it != c.end(); ++it) {
     if (predicate(*it))
       ++count;
@@ -3779,7 +3779,7 @@ void TestCase::UnshuffleTests() {
 //
 // FormatCountableNoun(1, "formula", "formuli") returns "1 formula".
 // FormatCountableNoun(5, "book", "books") returns "5 books".
-static internal::String FormatCountableNoun(int count,
+static internal::String FormatCountableNoun(long count,
                                             const char * singular_form,
                                             const char * plural_form) {
   return internal::String::Format("%d %s", count,

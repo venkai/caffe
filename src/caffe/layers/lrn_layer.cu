@@ -15,7 +15,7 @@ __global__ void LRNFillScale(const int nthreads, const Ftype* const in,
     const int w = index % width;
     const int h = (index / width) % height;
     const int n = index / width / height;
-    const int offset = (n * channels * height + h) * width + w;
+    const long offset = (n * channels * height + h) * width + w;
     const int step = height * width;
     const Ftype* const in_off = in + offset;
     Ftype* const scale_off = scale + offset;
@@ -126,7 +126,7 @@ __global__ void LRNComputeDiff(const int nthreads,
     const int w = index % width;
     const int h = (index / width) % height;
     const int n = index / width / height;
-    const int offset = (n * channels * height + h) * width + w;
+    const long offset = (n * channels * height + h) * width + w;
     const int step = height * width;
     const Btype* const bottom_off = bottom_data + offset;
     const Btype* const top_off = top_data + offset;

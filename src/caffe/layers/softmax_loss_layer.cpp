@@ -99,7 +99,7 @@ void SoftmaxWithLossLayer<Ftype, Btype>::Forward_cpu(
   const Ftype* prob_data = prob_->template cpu_data<Ftype>();
   const Ftype* label = bottom[1]->cpu_data<Ftype>();
   int dim = prob_->count() / outer_num_;
-  int count = 0;
+  long count = 0;
   float loss = 0.F;
   for (int i = 0; i < outer_num_; ++i) {
     for (int j = 0; j < inner_num_; j++) {
@@ -132,7 +132,7 @@ void SoftmaxWithLossLayer<Ftype, Btype>::Backward_cpu(const vector<Blob*>& top,
     caffe_copy(prob_->count(), prob_data, bottom_diff);
     const Btype* label = bottom[1]->cpu_data<Btype>();
     int dim = prob_->count() / outer_num_;
-    int count = 0;
+    long count = 0;
     for (int i = 0; i < outer_num_; ++i) {
       for (int j = 0; j < inner_num_; ++j) {
         const int label_value = static_cast<int>(label[i * inner_num_ + j]);

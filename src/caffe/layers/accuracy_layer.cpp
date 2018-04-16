@@ -54,7 +54,7 @@ void AccuracyLayer<Ftype, Btype>::Forward_cpu(const vector<Blob*>& bottom,
     top[1]->set_data(0.F);
   }
   std::vector<std::pair<float, int>> bottom_data_vector(num_labels);
-  int count = 0;
+  long count = 0;
   for (int i = 0; i < outer_num_; ++i) {
     for (int j = 0; j < inner_num_; ++j) {
       const int label_value = static_cast<int>(bottom_label[i * inner_num_ + j]);

@@ -31,7 +31,7 @@ template <typename Ftype, typename Btype>
 void ContrastiveLossLayer<Ftype, Btype>::Forward_cpu(
     const vector<Blob*>& bottom,
     const vector<Blob*>& top) {
-  int count = bottom[0]->count();
+  long count = bottom[0]->count();
   caffe_sub<Ftype>(
       count,
       bottom[0]->cpu_data<Ftype>(),  // a

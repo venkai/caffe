@@ -2690,10 +2690,10 @@ inline FILE* FDOpen(int fd, const char* mode) { return fdopen(fd, mode); }
 #endif
 inline int FClose(FILE* fp) { return fclose(fp); }
 #if !GTEST_OS_WINDOWS_MOBILE
-inline int Read(int fd, void* buf, unsigned int count) {
+inline int Read(int fd, void* buf, unsigned long count) {
   return static_cast<int>(read(fd, buf, count));
 }
-inline int Write(int fd, const void* buf, unsigned int count) {
+inline int Write(int fd, const void* buf, unsigned long count) {
   return static_cast<int>(write(fd, buf, count));
 }
 inline int Close(int fd) { return close(fd); }

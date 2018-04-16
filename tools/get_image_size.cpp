@@ -82,7 +82,7 @@ int main(int argc, char** argv) {
     LOG(FATAL) << "Failed to open file: " << argv[3];
   }
   int height, width;
-  int count = 0;
+  long count = 0;
   for (int line_id = 0; line_id < lines.size(); ++line_id) {
     boost::filesystem::path img_file = root_folder / lines[line_id].first;
     GetImageSize(img_file.string(), &height, &width);

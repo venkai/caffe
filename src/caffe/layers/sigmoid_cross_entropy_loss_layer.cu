@@ -15,7 +15,7 @@ void SigmoidCrossEntropyLossLayer<Ftype, Btype>::Backward_gpu(
   }
   if (propagate_down[0]) {
     // First, compute the diff
-    const int count = bottom[0]->count();
+    const long count = bottom[0]->count();
     const int num = bottom[0]->num();
     const Btype* sigmoid_output_data = sigmoid_output_->gpu_data();
     const Btype* target = bottom[1]->gpu_data<Btype>();
