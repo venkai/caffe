@@ -529,10 +529,18 @@ void Net::AppendTop(const NetParameter& param, const int layer_id, const int top
     top_id_vecs_[layer_id].push_back((*blob_name_to_idx)[blob_name]);
     gpu_shr_memory_data_use_ += top_vecs_[layer_id].back()->gpu_memory_data_use();
     gpu_shr_memory_diff_use_ += top_vecs_[layer_id].back()->gpu_memory_diff_use();
+  } else if (blob_name_to_idx && phase_ == TEST &&
+             blob_name_to_idx->find(blob_name) != blob_name_to_idx->end()) {
+    // Allow duplicated top-blobs during inference to save memory.
+    LOG_IF(INFO, Caffe::root_solver())
+        << layer_param.name() << " -> " << blob_name << " (duplicated)";
+    top_vecs_[layer_id].push_back(blobs_[(*blob_name_to_idx)[blob_name]].get());
+    top_id_vecs_[layer_id].push_back((*blob_name_to_idx)[blob_name]);
+    gpu_shr_memory_data_use_ += top_vecs_[layer_id].back()->gpu_memory_data_use();
+    gpu_shr_memory_diff_use_ += top_vecs_[layer_id].back()->gpu_memory_diff_use();
   } else if (blob_name_to_idx &&
              blob_name_to_idx->find(blob_name) != blob_name_to_idx->end()) {
-    // If we are not doing in-place computation but have duplicated blobs,
-    // raise an error.
+    // Raise an error for duplicated top-blobs during training.
     LOG(FATAL) << "Top blob '" << blob_name
                << "' produced by multiple sources.";
   } else {
