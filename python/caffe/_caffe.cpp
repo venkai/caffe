@@ -169,11 +169,11 @@ shared_ptr<Net> Net_Init(string param_file, int phase,
 // Net construct-and-load convenience constructor
 shared_ptr<Net> Net_Init_Load(string param_file, string pretrained_param_file, int phase) {
   PyGILRelease gil;
-  LOG(WARNING) << "DEPRECATION WARNING - deprecated use of Python interface";
+  /*LOG(WARNING) << "DEPRECATION WARNING - deprecated use of Python interface";
   LOG(WARNING) << "Use this instead (with the named \"weights\""
     << " parameter):";
   LOG(WARNING) << "Net('" << param_file << "', " << phase
-    << ", weights='" << pretrained_param_file << "')";
+    << ", weights='" << pretrained_param_file << "')";*/
   CheckFile(param_file);
   CheckFile(pretrained_param_file);
   shared_ptr<Net> net(new Net(param_file, static_cast<Phase>(phase)));

@@ -319,6 +319,12 @@ message NetParameter {
 
   // Sets the default "cudnn_math_override" value for every layer
   optional int32 default_cudnn_math_override = 19 [default = -1];
+  
+  // Select true to print the usual caffe stuff spanning several pages.
+  // When false, there is no std-out produced by net.cpp or layer_factory.hpp.
+  // You can override this in each individual layer if you wish to see
+  // layer-specific outputs.
+  optional bool verbosity = 20 [default = false];
 }
 
 // NOTE
@@ -579,6 +585,7 @@ message ParamSpec {
 // Update the next available ID when you add a new LayerParameter field.
 //
 // LayerParameter next available layer-specific ID: 152 (last added: recurrent_param)
+// LayerParameter next available layer-specific ID: 153 (last added: verbosity)
 message LayerParameter {
   optional string name = 1; // the layer name
   optional string type = 2; // the layer type
@@ -706,6 +713,9 @@ message LayerParameter {
   // NVIDIA PARAMETERS (Start with 68 because NV is 68 on an old-style phone)
   optional DetectNetGroundTruthParameter detectnet_groundtruth_param = 6801;
   optional DetectNetAugmentationParameter detectnet_augmentation_param = 6802;
+  
+  // Verbosity (can be overriden for a layer, or is copied from NetParameter)
+  optional bool verbosity = 153 [default = false];
 }
 
 // Message that stores parameters used to apply transformation

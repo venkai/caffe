@@ -168,7 +168,8 @@ class LayerRegistry {
   static shared_ptr<LayerBase> CreateLayer(const LayerParameter& param, size_t solver_rank) {
     const string& layer_type = param.type();
     const string& layer_name = param.name();
-    if (Caffe::root_solver()) {
+    const bool verbosity = param.verbosity();
+    if (Caffe::root_solver() && verbosity) {
       LOG(INFO) << "Creating layer '" << layer_name << "' of type '" << layer_type << "'";
     }
     CreatorRegistry& registry = Registry();
@@ -180,7 +181,7 @@ class LayerRegistry {
     Type btype = param.backward_type();
     Type fmath = param.forward_math();
     Type bmath = param.backward_math();
-    if (Caffe::root_solver()) {
+    if (Caffe::root_solver() && verbosity) {
       LOG(INFO) << "Layer's types are Ftype:" << Type_Name(ftype)
           << " Btype:" << Type_Name(btype)
           << " Fmath:" << Type_Name(fmath)

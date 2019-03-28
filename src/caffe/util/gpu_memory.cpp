@@ -102,7 +102,7 @@ void GPUMemory::Manager::init(const vector<int>& gpus, bool debug) {
     update_thresholds_[gpus[i]] = dev_info_[gpus[i]].total_;
   }
   initialized_ = true;
-  LOG(INFO) << "GPUMemory::Manager initialized";
+  // LOG(INFO) << "GPUMemory::Manager initialized";
   for (int i = 0; i < gpus.size(); ++i) {
     LOG(INFO) << report_dev_info(gpus[i]);
   }
@@ -245,7 +245,7 @@ std::string GPUMemory::Manager::report_dev_info(int device) {
   DevInfo dev_info;
   CUDA_CHECK(cudaMemGetInfo(&dev_info.free_, &dev_info.total_));
   std::ostringstream os;
-  os << "Total memory: " << props.totalGlobalMem << ", Free: " << dev_info.free_ << ", dev_info["
+  os << "Total GPU memory: " << props.totalGlobalMem << ", Free: " << dev_info.free_ << ", dev_info["
      << device << "]: total=" << dev_info_[device].total_ << " free=" << dev_info_[device].free_;
   return os.str();
 }

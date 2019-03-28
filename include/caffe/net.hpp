@@ -237,6 +237,8 @@ class Net {
   const shared_ptr<LayerBase> layer_by_name(const string& layer_name) const;
 
   void set_debug_info(const bool value) { debug_info_ = value; }
+  
+  void set_verbosity(const bool value) { verbosity_ = value; }
 
   // Helpers for Init.
   /**
@@ -441,7 +443,7 @@ class Net {
   std::atomic_llong wgrad_sq_;
   float global_grad_scale_coeff_, global_grad_scale_param_;
   bool has_global_grad_scale_param_, global_grad_scale_adaptive_;
-  /// Inner net runs on singe GPU (see recurrent layers)
+  /// Inner net runs on single GPU (see recurrent layers)
   const bool inner_net_;
 
   static constexpr float GRAD_FACTOR = 1.E6F;
@@ -449,6 +451,9 @@ class Net {
   static constexpr int END_OF_ITERATION = -1;
   static constexpr int END_OF_TRAIN = -2;
 
+  // Whether to print the usual caffe stuff (see field verbosity in NetParam)
+  static bool verbosity_;
+  
   DISABLE_COPY_MOVE_AND_ASSIGN(Net);
 };
 

@@ -20,6 +20,7 @@ namespace caffe {
 
 constexpr int Net::END_OF_ITERATION;
 constexpr int Net::END_OF_TRAIN;
+bool Net::verbosity_;
 
 Net::Net(const NetParameter& param,
     size_t solver_rank,
@@ -68,6 +69,8 @@ Net::~Net() {
 void Net::Init(const NetParameter& in_param) {
   CHECK(inner_net_ || Caffe::root_solver() || root_net_)
       << "root_net_ needs to be set for all non-root solvers";
+  // Set verbosity level
+  set_verbosity(in_param.verbosity());
   // Set phase from the state.
   phase_ = in_param.state().phase();
   // Filter layers based on their include/exclude rules and
@@ -76,9 +79,11 @@ void Net::Init(const NetParameter& in_param) {
   FilterNet(in_param, &filtered_param);
   net_param_ = filtered_param;
   batch_per_solver_ = caffe::P2PSync::divide_batch_size(&filtered_param);
-  LOG_IF(INFO, Caffe::root_solver())
-      << "Initializing net from parameters: " << std::endl
-      << filtered_param.DebugString();
+  if (verbosity_) {
+    LOG_IF(INFO, Caffe::root_solver())
+        << "Initializing net from parameters: " << std::endl
+        << filtered_param.DebugString();
+  }
   infer_count_ = 0UL;
   // Create a copy of filtered_param with splits added where necessary.
   NetParameter param;
@@ -106,13 +111,17 @@ void Net::Init(const NetParameter& in_param) {
     default_fmath = in_param.default_forward_math();
   } else {
     default_fmath = in_param.default_forward_type();
-    LOG(INFO) << "Using " << Type_Name(default_fmath) << " as default forward math type";
+    if (verbosity_) {
+      LOG(INFO) << "Using " << Type_Name(default_fmath) << " as default forward math type";
+    }
   }
   if (in_param.has_default_backward_math()) {
     default_bmath = in_param.default_backward_math();
   } else {
     default_bmath = in_param.default_backward_type();
-    LOG(INFO) << "Using " << Type_Name(default_bmath) << " as default backward math type";
+    if (verbosity_) {
+      LOG(INFO) << "Using " << Type_Name(default_bmath) << " as default backward math type";
+    }
   }
 
   wgrad_sq_.store(0LL);
@@ -128,10 +137,14 @@ void Net::Init(const NetParameter& in_param) {
 
     const LayerParameter& layer_param = param.layer(layer_id);
     LayerParameter* mutable_layer_param = param.mutable_layer(layer_id);
-
-    DLOG_IF(INFO, Caffe::root_solver())
-        << "Setting types for Layer " << layer_param.name();
-
+    if (!layer_param.has_verbosity()) {
+      mutable_layer_param->set_verbosity(verbosity_);
+    }
+    const bool layer_verbosity = layer_param.verbosity();
+    if (layer_verbosity) {
+      DLOG_IF(INFO, Caffe::root_solver())
+          << "Setting types for Layer " << layer_param.name();
+    }
     // Inherit phase from net if unset.
     if (!layer_param.has_phase()) {
       mutable_layer_param->set_phase(phase_);
@@ -189,15 +202,19 @@ void Net::Init(const NetParameter& in_param) {
           << "either 0 or bottom_size times ";
     }
     if (share_from_root) {
-      LOG(INFO) << "Sharing layer " << layer_param.name() << " from root net";
+      if (layer_verbosity) {
+        LOG(INFO) << "Sharing layer " << layer_param.name() << " from root net";
+      }
       layers_.push_back(root_net_->layers_[layer_id]);
       layers_[layer_id]->SetShared(true);
     } else {
       layers_.push_back(LayerRegistry::CreateLayer(layer_param, solver_rank_));
     }
     layer_names_.push_back(layer_param.name());
-    LOG_IF(INFO, Caffe::root_solver())
-        << "Created Layer " << layer_param.name() << " (" << layer_id << ")";
+    if (layer_verbosity) {
+      LOG_IF(INFO, Caffe::root_solver())
+          << "Created Layer " << layer_param.name() << " (" << layer_id << ")";
+    }
     bool need_backward = false;
 
     // Figure out this layer's input and output
@@ -248,25 +265,31 @@ void Net::Init(const NetParameter& in_param) {
       const vector<Blob*>& this_top = this->top_vecs_[layer_id];
       for (int top_id = 0; top_id < base_top.size(); ++top_id) {
         this_top[top_id]->ReshapeLike(*base_top[top_id]);
-        LOG(INFO) << "Created top blob " << top_id << " (shape: "
-            << this_top[top_id]->shape_string() <<  ") for shared layer "
-            << layer_param.name();
+        if (layer_verbosity) {
+          LOG(INFO) << "Created top blob " << top_id << " (shape: "
+              << this_top[top_id]->shape_string() <<  ") for shared layer "
+              << layer_param.name();
+        }
       }
     } else {
       layers_[layer_id]->set_parent_net(this);
       layers_[layer_id]->SetUp(bottom_vecs_[layer_id], top_vecs_[layer_id]);
     }
-    LOG_IF(INFO, Caffe::root_solver())
-        << "Setting up " << layer_names_[layer_id];
+    if (layer_verbosity) {
+      LOG_IF(INFO, Caffe::root_solver())
+          << "Setting up " << layer_names_[layer_id];
+    }
     for (int top_id = 0; top_id < top_vecs_[layer_id].size(); ++top_id) {
       if (blob_loss_weights_.size() <= top_id_vecs_[layer_id][top_id]) {
         blob_loss_weights_.resize(top_id_vecs_[layer_id][top_id] + 1, 0.F);
       }
       blob_loss_weights_[top_id_vecs_[layer_id][top_id]] = layer->loss(top_id);
-      LOG_IF(INFO, Caffe::root_solver())
-          << Phase_Name(phase_) << " Top shape for layer " << layer_id << " '"
-          << layer_names_[layer_id] << "' " <<  top_vecs_[layer_id][top_id]->shape_string();
-      if (layer->loss(top_id) != 0.F) {
+      if (layer_verbosity) {
+        LOG_IF(INFO, Caffe::root_solver())
+            << Phase_Name(phase_) << " Top shape for layer " << layer_id << " '"
+            << layer_names_[layer_id] << "' " <<  top_vecs_[layer_id][top_id]->shape_string();
+      }
+      if (layer->loss(top_id) != 0.F && layer_verbosity) {
         LOG_IF(INFO, Caffe::root_solver())
           << "    with loss weight " << layer->loss(top_id);
       }
@@ -306,6 +329,7 @@ void Net::Init(const NetParameter& in_param) {
   set<string> blobs_under_loss;
   set<string> blobs_skip_backp;
   for (int layer_id = layers_.size() - 1; layer_id >= 0; --layer_id) {
+    const bool layer_verbosity = param.layer(layer_id).verbosity();
     bool layer_contributes_loss = false;
     bool layer_skip_propagate_down = true;
     for (int top_id = 0; top_id < top_vecs_[layer_id].size(); ++top_id) {
@@ -330,7 +354,7 @@ void Net::Init(const NetParameter& in_param) {
       }
     }
     if (!layer_contributes_loss) { layer_need_backward_[layer_id] = false; }
-    if (Caffe::root_solver()) {
+    if (Caffe::root_solver() && layer_verbosity) {
       if (layer_need_backward_[layer_id]) {
         LOG(INFO) << layer_names_[layer_id] << " needs backward computation.";
       } else {
@@ -376,8 +400,10 @@ void Net::Init(const NetParameter& in_param) {
   // In the end, all remaining blobs are considered output blobs.
   for (set<string>::iterator it = available_blobs.begin();
       it != available_blobs.end(); ++it) {
-    LOG_IF(INFO, Caffe::root_solver())
-        << "This network produces output " << *it;
+    if (verbosity_) {
+      LOG_IF(INFO, Caffe::root_solver())
+          << "This network produces output " << *it;
+    }
     net_output_blobs_.push_back(blobs_[blob_name_to_idx[*it]].get());
     net_output_blob_indices_.push_back(blob_name_to_idx[*it]);
   }
@@ -398,7 +424,7 @@ void Net::Init(const NetParameter& in_param) {
   learnable_space_size_[0] = 0UL;
   learnable_space_size_[1] = 0UL;
   reduce_buckets_ = (size_t) in_param.reduce_buckets();
-  if (Caffe::device_count() > 0) {
+  if (Caffe::device_count() > 0 && verbosity_) {
     LOG_IF(INFO, Caffe::root_solver())
         << "Top memory (" << Phase_Name(phase_) << ") required for data: "
         << gpu_top_memory_data_use_ << " diff: " << gpu_top_memory_diff_use_;
@@ -417,7 +443,9 @@ void Net::Init(const NetParameter& in_param) {
   }
   debug_info_ = param.debug_info();
   trained_layers_shared_ = false;
-  LOG_IF(INFO, Caffe::root_solver()) << "Network initialization done.";
+  if (verbosity_) {
+    LOG_IF(INFO, Caffe::root_solver()) << "Network initialization done.";
+  }
 }
 
 void Net::FilterNet(const NetParameter& param, NetParameter* param_filtered) {
@@ -453,6 +481,7 @@ bool Net::StateMeetsRule(const NetState& state,
   // Check whether the rule is broken due to phase.
   if (rule.has_phase()) {
       if (rule.phase() != state.phase()) {
+        if (!(verbosity_)) { return false; }
         LOG_IF(INFO, Caffe::root_solver())
             << "The NetState phase (" << state.phase()
             << ") differed from the phase (" << rule.phase()
@@ -463,6 +492,7 @@ bool Net::StateMeetsRule(const NetState& state,
   // Check whether the rule is broken due to min level.
   if (rule.has_min_level()) {
     if (state.level() < rule.min_level()) {
+      if (!(verbosity_)) { return false; }
       LOG_IF(INFO, Caffe::root_solver())
           << "The NetState level (" << state.level()
           << ") is above the min_level (" << rule.min_level()
@@ -473,6 +503,7 @@ bool Net::StateMeetsRule(const NetState& state,
   // Check whether the rule is broken due to max level.
   if (rule.has_max_level()) {
     if (state.level() > rule.max_level()) {
+      if (!(verbosity_)) { return false; }
       LOG_IF(INFO, Caffe::root_solver())
           << "The NetState level (" << state.level()
           << ") is above the max_level (" << rule.max_level()
@@ -489,6 +520,7 @@ bool Net::StateMeetsRule(const NetState& state,
       if (rule.stage(i) == state.stage(j)) { has_stage = true; }
     }
     if (!has_stage) {
+      if (!(verbosity_)) { return false; }
       LOG_IF(INFO, Caffe::root_solver())
           << "The NetState did not contain stage '" << rule.stage(i)
           << "' specified by a rule in layer " << layer_name;
@@ -504,6 +536,7 @@ bool Net::StateMeetsRule(const NetState& state,
       if (rule.not_stage(i) == state.stage(j)) { has_stage = true; }
     }
     if (has_stage) {
+      if (!(verbosity_)) { return false; }
       LOG_IF(INFO, Caffe::root_solver())
           << "The NetState contained a not_stage '" << rule.not_stage(i)
           << "' specified by a rule in layer " << layer_name;
@@ -523,17 +556,21 @@ void Net::AppendTop(const NetParameter& param, const int layer_id, const int top
   if (blob_name_to_idx && layer_param.bottom_size() > top_id &&
       blob_name == layer_param.bottom(top_id)) {
     // In-place computation
-    LOG_IF(INFO, Caffe::root_solver())
-        << layer_param.name() << " -> " << blob_name << " (in-place)";
+    if (verbosity_) {
+      LOG_IF(INFO, Caffe::root_solver())
+          << layer_param.name() << " -> " << blob_name << " (in-place)";
+    }
     top_vecs_[layer_id].push_back(blobs_[(*blob_name_to_idx)[blob_name]].get());
     top_id_vecs_[layer_id].push_back((*blob_name_to_idx)[blob_name]);
     gpu_shr_memory_data_use_ += top_vecs_[layer_id].back()->gpu_memory_data_use();
     gpu_shr_memory_diff_use_ += top_vecs_[layer_id].back()->gpu_memory_diff_use();
   } else if (blob_name_to_idx && phase_ == TEST &&
              blob_name_to_idx->find(blob_name) != blob_name_to_idx->end()) {
-    // Allow duplicated top-blobs during inference to save memory.
-    LOG_IF(INFO, Caffe::root_solver())
-        << layer_param.name() << " -> " << blob_name << " (duplicated)";
+    if (verbosity_) {
+      // Allow duplicated top-blobs during inference to save memory.
+      LOG_IF(INFO, Caffe::root_solver())
+          << layer_param.name() << " -> " << blob_name << " (duplicated)";
+    }
     top_vecs_[layer_id].push_back(blobs_[(*blob_name_to_idx)[blob_name]].get());
     top_id_vecs_[layer_id].push_back((*blob_name_to_idx)[blob_name]);
     gpu_shr_memory_data_use_ += top_vecs_[layer_id].back()->gpu_memory_data_use();
@@ -545,7 +582,7 @@ void Net::AppendTop(const NetParameter& param, const int layer_id, const int top
                << "' produced by multiple sources.";
   } else {
     // Normal output.
-    if (Caffe::root_solver()) {
+    if (Caffe::root_solver() && verbosity_) {
       LOG(INFO) << layer_param.name() << " -> " << blob_name;
     }
 
@@ -576,8 +613,10 @@ int Net::AppendBottom(const NetParameter& param, const int layer_id,
                << layer_param.name() << "', bottom index " << bottom_id << ")";
   }
   const int blob_id = (*blob_name_to_idx)[blob_name];
-  LOG_IF(INFO, Caffe::root_solver())
-      << layer_names_[layer_id] << " <- " << blob_name;
+  if (verbosity_) {
+    LOG_IF(INFO, Caffe::root_solver())
+        << layer_names_[layer_id] << " <- " << blob_name;
+  }
   bottom_vecs_[layer_id].push_back(blobs_[blob_id].get());
   bottom_id_vecs_[layer_id].push_back(blob_id);
   available_blobs->erase(blob_name);
@@ -635,10 +674,12 @@ void Net::AppendParam(const NetParameter& param, const int layer_id, const int p
         param_layer_indices_[owner_net_param_id];
     const int owner_layer_id = owner_index.first;
     const int owner_param_id = owner_index.second;
-    LOG_IF(INFO, Caffe::root_solver()) << "Sharing parameters '" << param_name
-        << "' owned by "
-        << "layer '" << layer_names_[owner_layer_id] << "', param "
-        << "index " << owner_param_id;
+    if (verbosity_) {
+      LOG_IF(INFO, Caffe::root_solver()) << "Sharing parameters '" << param_name
+          << "' owned by "
+          << "layer '" << layer_names_[owner_layer_id] << "', param "
+          << "index " << owner_param_id;
+    }
     Blob* this_blob = layers_[layer_id]->blobs()[param_id].get();
     Blob* owner_blob =
         layers_[owner_layer_id]->blobs()[owner_param_id].get();
@@ -1069,10 +1110,13 @@ void Net::ShareTrainedLayersWith(const Net* other) {
       ++target_layer_id;
     }
     if (target_layer_id == layer_names_.size()) {
+      if (!(verbosity_)) { continue; }
       LOG(INFO) << "Ignoring source layer " << source_layer_name;
       continue;
     }
-    DLOG(INFO) << "Copying source layer " << source_layer_name;
+    if (verbosity_) {
+      DLOG(INFO) << "Copying source layer " << source_layer_name;
+    }
     vector<shared_ptr<Blob> >& target_blobs =
         layers_[target_layer_id]->blobs();
     CHECK_EQ(target_blobs.size(), source_layer->blobs().size())
@@ -1134,33 +1178,44 @@ void Net::CopyTrainedLayersFrom(const NetParameter& param) {
       ++target_layer_id;
     }
     if (target_layer_id == layer_names_.size()) {
+      if (!(verbosity_)) { continue; }
       LOG(INFO) << "Ignoring source layer " << source_layer_name;
       continue;
     }
-    DLOG(INFO) << "Copying source layer " << source_layer_name;
+    if (verbosity_) {
+      DLOG(INFO) << "Copying source layer " << source_layer_name;
+    }
     vector<shared_ptr<Blob> >& target_blobs =
         layers_[target_layer_id]->blobs();
     CHECK_EQ(target_blobs.size(), source_layer.blobs_size())
         << "Incompatible number of blobs for layer " << source_layer_name;
-    LOG(INFO) << "Copying source layer " << source_layer_name << " Type:"
-              << source_layer_type << " #blobs=" << source_layer.blobs_size();
+    if (verbosity_) {
+      LOG(INFO) << "Copying source layer " << source_layer_name << " Type:"
+                << source_layer_type << " #blobs=" << source_layer.blobs_size();
+    }
     // check if BN is in legacy DIGITS format?
     if (source_layer_type == "BatchNorm" && source_layer.blobs_size() == 5) {
       for (int j = 0; j < target_blobs.size(); ++j) {
         const bool kReshape = true;
         target_blobs[j]->FromProto(source_layer.blobs(j), kReshape);
-        DLOG(INFO) << target_blobs[j]->count();
+        if (verbosity_) {
+          DLOG(INFO) << target_blobs[j]->count();
+        }
       }
       if (target_blobs[4]->count() == 1) {
         // old format: 0 - scale , 1 - bias,  2 - mean , 3 - var, 4 - reserved
         // new format: 0 - mean  , 1 - var,  2 - reserved , 3- scale, 4 - bias
-        LOG(INFO) << "BN legacy DIGITS format detected ... ";
+        if (verbosity_) {
+          LOG(INFO) << "BN legacy DIGITS format detected ... ";
+        }
         std::swap(target_blobs[0], target_blobs[2]);
         std::swap(target_blobs[1], target_blobs[3]);
         // ==> 0 - mean , 1 -var,  2 - scale , 3 - bias; 4 - reserved
         std::swap(target_blobs[2], target_blobs[4]);
         std::swap(target_blobs[3], target_blobs[4]);
-        LOG(INFO) << "BN Transforming to new format completed.";
+        if (verbosity_) {
+          LOG(INFO) << "BN Transforming to new format completed.";
+        }
       }
     } else {
       for (int j = 0; j < target_blobs.size(); ++j) {
@@ -1208,6 +1263,7 @@ void Net::CopyTrainedLayersFromHDF5(const string trained_filename) {
   for (int i = 0; i < num_layers; ++i) {
     string source_layer_name = hdf5_get_name_by_idx(data_hid, i);
     if (!layer_names_index_.count(source_layer_name)) {
+      if (!(verbosity_)) { continue; }
       LOG(INFO) << "Ignoring source layer " << source_layer_name;
       continue;
     }
@@ -1251,7 +1307,9 @@ void Net::ToProto(NetParameter* param, bool write_diff) const {
   param->Clear();
   param->set_name(name_);
   // Add bottom and top
-  DLOG(INFO) << "Serializing " << layers_.size() << " layers";
+  if (verbosity_) {
+    DLOG(INFO) << "Serializing " << layers_.size() << " layers";
+  }
   for (int i = 0; i < layers_.size(); ++i) {
     LayerParameter* layer_param = param->add_layer();
     layers_[i]->ToProto(layer_param, write_diff);
@@ -1413,9 +1471,11 @@ void Net::InitializeLearnableDiffSpace(int type_id) {
   if (learnable_space_size_[type_id] < 2) {
     learnable_space_size_[type_id] = 2;
   }
-  LOG(INFO) << print_current_device() << " Reserving "
-            << learnable_space_size_[type_id] << " bytes of shared learnable space for type "
-            << Type_Name(t);
+  if (verbosity_) {
+    LOG(INFO) << print_current_device() << " Reserving "
+              << learnable_space_size_[type_id] << " bytes of shared learnable space for type "
+              << Type_Name(t);
+  }
   learnable_space_[type_id].reserve(learnable_space_size_[type_id]);
   unsigned char* ptr = reinterpret_cast<unsigned char*>(learnable_space_[type_id].data());
   caffe_gpu_memset(learnable_space_size_[type_id], 0, ptr);
@@ -1436,7 +1496,7 @@ void Net::InitializeLearnableDiffSpace(int type_id) {
             (void) p;
           }
         }
-      } else {
+      } else if(verbosity_) {
         DLOG(INFO) << print_current_device()
             << "** Skipping non-learnable blob from " << layers_[i]->name()
             << " of type " << layers_[i]->type();
